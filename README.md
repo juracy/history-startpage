@@ -1,6 +1,6 @@
 # Chrome Dynamic Startpage
 
-Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que substitui a **New Tab Page** por um painel analítico dos seus acessos nos últimos 30 dias.
+Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que substitui a **New Tab Page** por um painel analítico dos seus acessos no período escolhido (padrão: 30 dias).
 
 ## 🚀 Funcionalidades
 
@@ -9,7 +9,10 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Normaliza subpastas e rotas internas (ignora `/-/`, `/tree/`, `/pulls`, etc.).
   - Agrupa repositórios por Organização / Workspace / Subgrupo.
 - **Domínios Mais Acessados:**
-  - Extrai e consolida o host raiz dos seus sites mais frequentados no mês, evitando poluição de URLs específicas.
+  - Extrai e consolida o host raiz dos seus sites mais frequentados no período, evitando poluição de URLs específicas.
+- **Seletor de Período:**
+  - Escolha a janela do histórico no topo do painel: 24 horas, 1 semana, 1 mês (padrão), 3 meses, 6 meses ou 1 ano. A escolha é lembrada e sincronizada via `chrome.storage.sync`.
+  - O Chrome costuma guardar só os últimos ~90 dias de histórico; por isso 6 meses e 1 ano normalmente mostram o mesmo que 3 meses.
 - **Busca Instantânea:**
   - Filtra repositórios, domínios e agrupamentos enquanto você digita, pela URL ou pelo título das páginas visitadas (sem diferenciar maiúsculas nem acentos; `Esc` limpa).
   - Como o Chrome dá o foco da nova aba à barra de endereço, use `Shift+F6` para ir à busca, `/` quando a página já tem o foco, ou `Alt+T` para abrir o painel com o cursor já na busca (o atalho pode ser trocado em `chrome://extensions/shortcuts`).

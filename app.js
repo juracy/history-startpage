@@ -1,8 +1,18 @@
-const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HISTORY_PERIODS = [
+  { id: '1d', label: '24 horas', phrase: 'nas últimas 24 horas', ms: DAY_MS },
+  { id: '7d', label: '1 semana', phrase: 'na última semana', ms: 7 * DAY_MS },
+  { id: '30d', label: '1 mês', phrase: 'no último mês', ms: 30 * DAY_MS },
+  { id: '90d', label: '3 meses', phrase: 'nos últimos 3 meses', ms: 90 * DAY_MS },
+  { id: '180d', label: '6 meses', phrase: 'nos últimos 6 meses', ms: 180 * DAY_MS },
+  { id: '365d', label: '1 ano', phrase: 'no último ano', ms: 365 * DAY_MS }
+];
+const DEFAULT_PERIOD_ID = '30d';
 const HISTORY_PAGE_SIZE = 5000;
 const VISITS_CONCURRENCY = 100;
 const DEFAULT_GIT_HOSTS = ['github.com', 'gitlab.com'];
 const SEARCH_DEBOUNCE_MS = 200;
+const PERIOD_DEBOUNCE_MS = 400;
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -24,6 +34,11 @@ const GIT_STOP_KEYWORDS = new Set([
 
 let currentGitHosts = [...DEFAULT_GIT_HOSTS];
 
+let currentPeriod = findPeriod(DEFAULT_PERIOD_ID);
+
+// Incrementado a cada carregamento; resultados de um carregamento anterior são descartados
+let historyLoadId = 0;
+
 // Agrupamentos do usuário: [{ id, title, pattern }]; a primeira regra que casar vence
 let currentUrlGroups = [];
 
@@ -34,6 +49,10 @@ let historyEntries = null;
 let searchTerms = [];
 
 // --- Utilitários ---
+
+function findPeriod(id) {
+  return HISTORY_PERIODS.find(p => p.id === id) || null;
+}
 
 function normalizeHost(value) {
   const raw = String(value ?? '').trim().toLowerCase();
@@ -207,6 +226,28 @@ function saveUrlGroups(update) {
   });
 }
 
+async function loadHistoryPeriod() {
+  try {
+    const data = await chrome.storage.sync.get({ historyPeriod: DEFAULT_PERIOD_ID });
+    currentPeriod = findPeriod(data.historyPeriod) || findPeriod(DEFAULT_PERIOD_ID);
+  } catch (e) {
+    console.error('Falha ao carregar o período:', e);
+    currentPeriod = findPeriod(DEFAULT_PERIOD_ID);
+  }
+  return currentPeriod;
+}
+
+// A troca vale na hora; falha ao salvar só impede que a escolha valha para as próximas abas
+function saveHistoryPeriod(id) {
+  return enqueueSave(async () => {
+    try {
+      await chrome.storage.sync.set({ historyPeriod: id });
+    } catch (e) {
+      console.error('Falha ao salvar o período:', e);
+    }
+  });
+}
+
 function parseGitRepository(url) {
   const segments = url.pathname.split('/').filter(Boolean);
   if (segments.length < 2) return null;
@@ -234,7 +275,8 @@ function parseGitRepository(url) {
 
 // --- Carregamento do Histórico ---
 
-async function fetchHistoryItems(startTime) {
+// isCurrent() falso = carregamento substituído por outro; a função para e devolve null
+async function fetchHistoryItems(startTime, isCurrent) {
   const seen = new Map();
   let endTime = Date.now();
 
@@ -246,6 +288,7 @@ async function fetchHistoryItems(startTime) {
       endTime,
       maxResults: HISTORY_PAGE_SIZE
     });
+    if (!isCurrent()) return null;
 
     let added = 0;
     let oldest = endTime;
@@ -269,9 +312,10 @@ async function countRecentVisits(rawUrl, startTime) {
   return visits.filter(v => v.visitTime >= startTime).length;
 }
 
-async function buildHistoryEntries() {
-  const startTime = Date.now() - ONE_MONTH_MS;
-  const items = await fetchHistoryItems(startTime);
+async function buildHistoryEntries(periodMs, isCurrent) {
+  const startTime = Date.now() - periodMs;
+  const items = await fetchHistoryItems(startTime, isCurrent);
+  if (!items) return null;
 
   const candidates = [];
   for (const item of items) {
@@ -291,6 +335,7 @@ async function buildHistoryEntries() {
   for (let i = 0; i < candidates.length; i += VISITS_CONCURRENCY) {
     const batch = candidates.slice(i, i + VISITS_CONCURRENCY);
     const counts = await Promise.all(batch.map(c => countRecentVisits(c.rawUrl, startTime)));
+    if (!isCurrent()) return null;
     batch.forEach((c, j) => {
       if (counts[j] > 0) {
         entries.push({
@@ -309,15 +354,26 @@ async function buildHistoryEntries() {
   return entries;
 }
 
-async function loadHistory() {
+// Invalida o carregamento em andamento e mostra o estado de carregamento.
+// Sem cache nesse intervalo, para que busca ou configurações não redesenhem dados de outro período
+function startHistoryLoading() {
+  historyEntries = null;
   updateUrlGroupsVisibility();
   renderMessage(document.getElementById('url-groups'), 'Carregando…');
   renderMessage(document.getElementById('git-repos'), 'Carregando…');
   renderMessage(document.getElementById('top-domains'), 'Carregando…');
+  return ++historyLoadId;
+}
 
+async function loadHistory() {
+  const loadId = startHistoryLoading();
+  const isCurrent = () => loadId === historyLoadId;
+
+  let entries;
   try {
-    historyEntries = await buildHistoryEntries();
+    entries = await buildHistoryEntries(currentPeriod.ms, isCurrent);
   } catch (e) {
+    if (loadId !== historyLoadId) return;
     console.error('Falha ao carregar histórico:', e);
     renderMessage(document.getElementById('url-groups'), 'Erro ao carregar o histórico.');
     renderMessage(document.getElementById('git-repos'), 'Erro ao carregar o histórico.');
@@ -325,6 +381,8 @@ async function loadHistory() {
     return;
   }
 
+  if (loadId !== historyLoadId) return;
+  historyEntries = entries;
   renderDashboard();
 }
 
@@ -521,7 +579,7 @@ function renderUrlGroups(userGroups) {
 
   document.getElementById('url-groups-section').hidden = groups.length === 0;
   container.replaceChildren(...groups.map(group =>
-    createGroupBlock(group.title, sortByCount(userGroups.get(group.id)), 'Nenhum acesso no último mês.')
+    createGroupBlock(group.title, sortByCount(userGroups.get(group.id)), `Nenhum acesso ${currentPeriod.phrase}.`)
   ));
 }
 
@@ -531,7 +589,7 @@ function renderCategorizedRepos(projectGroups) {
   if (projectGroups.size === 0) {
     renderMessage(container, searchTerms.length > 0
       ? 'Nenhum repositório encontrado.'
-      : 'Nenhum repositório acessado no último mês.');
+      : `Nenhum repositório acessado ${currentPeriod.phrase}.`);
     return;
   }
 
@@ -730,6 +788,42 @@ function setupUrlGroupsModal() {
   onEnter(patternInput, handleAdd);
 }
 
+// --- Período ---
+
+function updatePeriodTitle() {
+  document.getElementById('page-title').textContent = `Visão Geral · ${currentPeriod.label}`;
+}
+
+function setupPeriodSelect() {
+  const select = document.getElementById('period-select');
+
+  select.replaceChildren(...HISTORY_PERIODS.map(period => {
+    const option = document.createElement('option');
+    option.value = period.id;
+    option.textContent = period.label;
+    return option;
+  }));
+  select.value = currentPeriod.id;
+  updatePeriodTitle();
+
+  // Com o select fechado, cada seta do teclado dispara um change: a troca aparece na hora,
+  // mas a recarga e a gravação esperam o usuário parar
+  let timer = null;
+  select.addEventListener('change', () => {
+    const period = findPeriod(select.value);
+    if (!period || period === currentPeriod) return;
+    currentPeriod = period;
+    updatePeriodTitle();
+    startHistoryLoading();
+
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      saveHistoryPeriod(period.id);
+      loadHistory();
+    }, PERIOD_DEBOUNCE_MS);
+  });
+}
+
 // --- Busca ---
 
 function setupSearch() {
@@ -793,6 +887,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSearch();
   setupGitHostsModal();
   setupUrlGroupsModal();
-  await Promise.all([loadGitHosts(), loadUrlGroups()]);
+  await Promise.all([loadGitHosts(), loadUrlGroups(), loadHistoryPeriod()]);
+  setupPeriodSelect();
   await loadHistory();
 });
