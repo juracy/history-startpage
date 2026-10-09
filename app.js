@@ -15,7 +15,10 @@ const GIT_STOP_KEYWORDS = new Set([
   'jobs', 'activity', 'settings', 'releases', 'tags', 'compare', 'actions',
   'wiki', 'wikis', 'discussions', 'security', 'projects', 'network',
   'graphs', 'pulse', 'milestones', 'labels', 'packages', 'deployments',
-  'environments', 'forks', 'stargazers', 'watchers', 'find', 'search'
+  'environments', 'forks', 'stargazers', 'watchers', 'find', 'search',
+  'agents', 'custom-properties', 'insights', 'models', 'codespaces',
+  'attestations', 'rules', 'contributors', 'community', 'sponsors',
+  'archive', 'subscription'
 ]);
 
 let currentGitHosts = [...DEFAULT_GIT_HOSTS];
@@ -43,6 +46,28 @@ function safeDecode(value) {
   } catch (e) {
     return value;
   }
+}
+
+// Raiz = caminho com exatamente rootSegmentCount segmentos; a query é ignorada,
+// mas rotas de SPA no hash (#/... ou #!/...) contam como página interna
+function isRootUrl(url, rootSegmentCount) {
+  const segmentCount = url.pathname.split('/').filter(Boolean).length;
+  return segmentCount === rootSegmentCount && !/^#!?\//.test(url.hash);
+}
+
+// Remove contadores de notificação do início, como "(17) Inbox"
+function cleanTitle(title) {
+  return (title || '').trim().replace(/^\(\d+\+?\)\s*/, '');
+}
+
+// Remove do título o que o card já mostra: "GitHub - ", "owner/repo: " e " · GitLab"
+function stripRepoTitle(title, fullPath) {
+  let result = title.replace(/^GitHub - /, '').replace(/\s*·\s*GitLab$/, '');
+  const normalized = result.replace(/\s*\/\s*/g, '/');
+  if (normalized.toLowerCase().startsWith(fullPath.toLowerCase())) {
+    result = normalized.slice(fullPath.length).replace(/^[\s:·|–-]+/, '');
+  }
+  return result.trim();
 }
 
 function parseWebUrl(rawUrl) {
@@ -107,10 +132,12 @@ function parseGitRepository(url) {
   const fullRepoPath = cleanSegments.join('/');
 
   return {
+    fullPath: safeDecode(fullRepoPath),
     projectGroup: safeDecode(groupSegments.join('/')),
     repoName: safeDecode(repoName),
     repoUrl: `${url.origin}/${fullRepoPath}`,
-    uniqueKey: `${url.host}/${fullRepoPath}`
+    uniqueKey: `${url.host}/${fullRepoPath}`,
+    isRoot: isRootUrl(url, cleanSegments.length)
   };
 }
 
@@ -158,7 +185,14 @@ async function buildHistoryEntries() {
   const candidates = [];
   for (const item of items) {
     const url = parseWebUrl(item.url);
-    if (url) candidates.push({ url, rawUrl: item.url, lastVisitTime: item.lastVisitTime });
+    if (url) {
+      candidates.push({
+        url,
+        rawUrl: item.url,
+        title: cleanTitle(item.title),
+        lastVisitTime: item.lastVisitTime
+      });
+    }
   }
 
   // visitCount do history.search é o total histórico; conta apenas as visitas dentro da janela
@@ -168,7 +202,7 @@ async function buildHistoryEntries() {
     const counts = await Promise.all(batch.map(c => countRecentVisits(c.rawUrl, startTime)));
     batch.forEach((c, j) => {
       if (counts[j] > 0) {
-        entries.push({ url: c.url, lastVisitTime: c.lastVisitTime, visits: counts[j] });
+        entries.push({ url: c.url, title: c.title, lastVisitTime: c.lastVisitTime, visits: counts[j] });
       }
     });
   }
@@ -195,12 +229,33 @@ async function loadHistory() {
 
 // --- Processamento do Histórico ---
 
+// Acumula visitas e candidatos a título; resolveAggregate reduz a { name, url, count, title }
+function newAggregate(name, url) {
+  return { name, url, count: 0, rootTitle: '', topTitle: '', topTitleVisits: 0 };
+}
+
+function trackVisit(target, title, visits, isRoot) {
+  target.count += visits;
+  if (!title) return;
+  if (isRoot && !target.rootTitle) target.rootTitle = title;
+  if (visits > target.topTitleVisits) {
+    target.topTitle = title;
+    target.topTitleVisits = visits;
+  }
+}
+
+// Repositórios usam só o título da raiz; domínios caem para o da página mais visitada
+function resolveAggregate({ name, url, count, rootTitle, topTitle }, allowFallback) {
+  const title = rootTitle || (allowFallback ? topTitle : '');
+  return { name, url, count, title: title === name ? '' : title };
+}
+
 function categorizeHistory(entries) {
   const gitHosts = new Set(currentGitHosts);
   const projectGroups = new Map();
   const domainCounts = new Map();
 
-  for (const { url, visits } of entries) {
+  for (const { url, title, visits } of entries) {
     const hostname = url.hostname.replace(/^www\./, '');
 
     if (gitHosts.has(hostname)) {
@@ -213,12 +268,9 @@ function categorizeHistory(entries) {
         }
 
         const groupRepos = projectGroups.get(groupKey);
-        const current = groupRepos.get(repoInfo.uniqueKey) || {
-          name: repoInfo.repoName,
-          url: repoInfo.repoUrl,
-          count: 0
-        };
-        current.count += visits;
+        const current = groupRepos.get(repoInfo.uniqueKey) ||
+          newAggregate(repoInfo.repoName, repoInfo.repoUrl);
+        trackVisit(current, stripRepoTitle(title, repoInfo.fullPath), visits, repoInfo.isRoot);
         groupRepos.set(repoInfo.uniqueKey, current);
         continue;
       }
@@ -226,14 +278,15 @@ function categorizeHistory(entries) {
 
     // Demais domínios: agrupa por host + porta; o link usa a origem do acesso mais recente
     const domainKey = url.host.replace(/^www\./, '');
-    const currentDomain = domainCounts.get(domainKey) || {
-      name: domainKey,
-      url: url.origin,
-      count: 0
-    };
-    currentDomain.count += visits;
+    const currentDomain = domainCounts.get(domainKey) || newAggregate(domainKey, url.origin);
+    trackVisit(currentDomain, title, visits, isRootUrl(url, 0));
     domainCounts.set(domainKey, currentDomain);
   }
+
+  for (const groupRepos of projectGroups.values()) {
+    for (const [key, repo] of groupRepos) groupRepos.set(key, resolveAggregate(repo, false));
+  }
+  for (const [key, domain] of domainCounts) domainCounts.set(key, resolveAggregate(domain, true));
 
   return { projectGroups, domainCounts };
 }
@@ -255,21 +308,32 @@ function renderMessage(container, text) {
   container.replaceChildren(div);
 }
 
-function createItemCard({ name, url, count }) {
+function createItemCard({ name, url, count, title }) {
   const a = document.createElement('a');
   a.className = 'item-card';
   a.href = url;
+  a.title = title ? `${title}\n${url}` : url;
+
+  const textEl = document.createElement('span');
+  textEl.className = 'item-text';
 
   const nameEl = document.createElement('span');
   nameEl.className = 'item-name';
-  nameEl.title = url;
   nameEl.textContent = name;
+  textEl.appendChild(nameEl);
+
+  if (title) {
+    const titleEl = document.createElement('span');
+    titleEl.className = 'item-title';
+    titleEl.textContent = title;
+    textEl.appendChild(titleEl);
+  }
 
   const countEl = document.createElement('span');
   countEl.className = 'item-count';
   countEl.textContent = count;
 
-  a.append(nameEl, countEl);
+  a.append(textEl, countEl);
   return a;
 }
 
