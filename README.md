@@ -12,6 +12,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Extrai e consolida o host raiz dos seus sites mais frequentados no mês, evitando poluição de URLs específicas.
 - **Busca Instantânea:**
   - Filtra repositórios, domínios e agrupamentos enquanto você digita, pela URL ou pelo título das páginas visitadas (sem diferenciar maiúsculas nem acentos; `Esc` limpa).
+  - Como o Chrome dá o foco da nova aba à barra de endereço, use `Shift+F6` para ir à busca, `/` quando a página já tem o foco, ou `Alt+T` para abrir o painel com o cursor já na busca (o atalho pode ser trocado em `chrome://extensions/shortcuts`).
 - **Configuração Dinâmica in-browser:**
   - Modal nativo para adicionar e remover instâncias Git personalizadas sem editar código.
   - Sincronização via `chrome.storage.sync`.
@@ -24,6 +25,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 ├── manifest.json       # Configuração da extensão Manifest V3
 ├── index.html          # Layout visual e interface do modal
 ├── app.js              # Lógica de extração, agregação e storage
+├── background.js       # Atalho Alt+T que abre o painel com foco na busca
 └── README.md           # Documentação
 ```
 

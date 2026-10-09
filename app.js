@@ -624,6 +624,10 @@ function onEnter(input, handler) {
   });
 }
 
+function isModalOpen() {
+  return document.querySelector('dialog[open]') !== null;
+}
+
 function setupDialog(dialog, openBtn, closeBtn, focusEl, onOpen) {
   openBtn.addEventListener('click', () => {
     onOpen();
@@ -751,6 +755,37 @@ function setupSearch() {
       input.value = '';
       apply();
     }
+  });
+
+  // O Chrome dá o foco da nova aba à barra de endereço; quando a página o recebe pelo
+  // teclado (F6/Shift+F6), ele vai para a busca. Foco vindo de clique é ignorado, para não
+  // roubar o clique num card nem uma seleção de texto. A ordem entre o evento de foco e o
+  // pointerdown varia, então a decisão espera um instante e olha os dois lados
+  let lastPointerDown = -Infinity;
+  window.addEventListener('pointerdown', () => { lastPointerDown = performance.now(); }, true);
+
+  window.addEventListener('focus', () => {
+    const focusedAt = performance.now();
+    setTimeout(() => {
+      if (lastPointerDown >= focusedAt - 100) return;
+      if (document.activeElement === document.body && !isModalOpen()) {
+        input.focus({ preventScroll: true });
+      }
+    }, 50);
+  });
+
+  // "/" foca a busca de qualquer ponto da página, como no GitHub e no YouTube.
+  // AltGr (que em alguns layouts produz "/") chega como Ctrl+Alt no Windows
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.isComposing) return;
+    if ((e.ctrlKey || e.metaKey) && !e.getModifierState('AltGraph')) return;
+
+    const target = e.target;
+    if (target.isContentEditable || target.closest('input, textarea, select') || isModalOpen()) return;
+
+    e.preventDefault();
+    input.focus();
+    input.select();
   });
 }
 
