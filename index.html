@@ -11,6 +11,8 @@
       --text: #f8fafc;
       --text-muted: #94a3b8;
       --accent: #38bdf8;
+      --on-accent: #0f172a;
+      --accent-hover: #7dd3fc;
       --border: #334155;
       --danger: #f87171;
     }
@@ -54,12 +56,12 @@
     }
     .btn-primary {
       background: var(--accent);
-      color: #0f172a;
+      color: var(--on-accent);
       font-weight: 600;
       border: none;
     }
     .btn-primary:hover {
-      background: #7dd3fc;
+      background: var(--accent-hover);
     }
     [hidden] {
       display: none !important;
@@ -111,7 +113,7 @@
     }
     .project-group {
       margin-bottom: 1.25rem;
-      background: rgba(30, 41, 59, 0.5);
+      background: color-mix(in srgb, var(--card-bg) 50%, transparent);
       border-radius: 8px;
       padding: 0.75rem;
       border: 1px solid var(--border);
@@ -169,7 +171,7 @@
     .item-count {
       font-size: 0.8rem;
       color: var(--text-muted);
-      background: rgba(255, 255, 255, 0.05);
+      background: color-mix(in srgb, var(--text) 5%, transparent);
       padding: 0.2rem 0.5rem;
       border-radius: 4px;
       flex-shrink: 0;
@@ -270,6 +272,8 @@
       justify-content: flex-end;
     }
   </style>
+  <!-- Gerado pelo matugen a partir do papel de parede; sobrescreve as cores acima -->
+  <link rel="stylesheet" href="theme.css">
 </head>
 <body>
   <div class="container">

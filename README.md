@@ -26,6 +26,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 ├── index.html          # Layout visual e interface do modal
 ├── app.js              # Lógica de extração, agregação e storage
 ├── background.js       # Atalho Alt+T que abre o painel com foco na busca
+├── theme.css           # Cores geradas pelo matugen (opcional, não versionado)
 └── README.md           # Documentação
 ```
 
@@ -51,6 +52,33 @@ Para adicionar instâncias corporativas ou self-hosted:
 3. Insira o host da sua instância (exemplo: `gitlab.empresa.local`, `git.meudominio.com`).
 4. Pressione Enter ou clique em **Adicionar**.
 5. O painel reprocessará seu histórico automaticamente com os novos agrupamentos.
+
+## 🎨 Tema com matugen
+
+As cores do painel podem acompanhar o papel de parede via [matugen](https://github.com/InioX/matugen). Como a extensão é carregada sem compactação, o Chrome lê os arquivos direto da pasta a cada nova aba: basta o matugen gerar um `theme.css` aqui dentro, sem recarregar a extensão. Sem esse arquivo, valem as cores padrão definidas em `index.html`.
+
+1. Crie o template `~/.config/matugen/templates/chrome-startpage.css`:
+   ```css
+   :root {
+       --bg: {{colors.surface.default.hex}};
+       --card-bg: {{colors.surface_container.default.hex}};
+       --card-hover: {{colors.surface_container_high.default.hex}};
+       --text: {{colors.on_surface.default.hex}};
+       --text-muted: {{colors.on_surface_variant.default.hex}};
+       --accent: {{colors.primary.default.hex}};
+       --on-accent: {{colors.on_primary.default.hex}};
+       --accent-hover: color-mix(in srgb, {{colors.primary.default.hex}} 80%, {{colors.on_surface.default.hex}});
+       --border: {{colors.outline_variant.default.hex}};
+       --danger: {{colors.error.default.hex}};
+   }
+   ```
+2. Registre-o no `~/.config/matugen/config.toml`, apontando a saída para a pasta da extensão:
+   ```toml
+   [templates.chrome-startpage]
+   input_path = '~/.config/matugen/templates/chrome-startpage.css'
+   output_path = '~/workspace/chrome-dynamic-startpage/theme.css'
+   ```
+3. Na próxima troca de papel de parede (`matugen image …`), basta abrir uma nova aba.
 
 ## ⌨️ Atalhos de Teclado
 
