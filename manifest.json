@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Custom Dynamic Dashboard",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Dashboard para a página inicial com repositórios Git e domínios mais acessados no período escolhido.",
   "permissions": [
+    "favicon",
     "history",
     "storage"
   ],

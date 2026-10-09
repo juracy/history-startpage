@@ -160,11 +160,26 @@
       border-color: var(--accent);
       transform: translateY(-1px);
     }
+    .item-main {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+      margin-right: 1rem;
+    }
+    .item-icon {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+    }
+    .tag-label .item-icon {
+      width: 16px;
+      height: 16px;
+    }
     .item-text {
       display: flex;
       flex-direction: column;
       min-width: 0;
-      margin-right: 1rem;
     }
     .item-name, .item-title {
       overflow: hidden;
@@ -246,6 +261,12 @@
       border-radius: 6px;
       border: 1px solid var(--border);
       font-size: 0.9rem;
+    }
+    .tag-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 0;
     }
     .tag-text {
       display: flex;

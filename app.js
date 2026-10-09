@@ -45,6 +45,9 @@ let currentUrlGroups = [];
 // Cache do histórico já processado: [{ url: URL, visits }], do acesso mais recente ao mais antigo
 let historyEntries = null;
 
+// Página raiz visitada de cada host (sem "www."), de onde vem o ícone do site
+let hostIconPages = new Map();
+
 // Termos da busca já normalizados; vazio = sem filtro
 let searchTerms = [];
 
@@ -340,6 +343,8 @@ async function buildHistoryEntries(periodMs, isCurrent) {
       if (counts[j] > 0) {
         entries.push({
           url: c.url,
+          // O cache de favicons do Chrome é indexado pela URL como está no histórico
+          rawUrl: c.rawUrl,
           title: c.title,
           lastVisitTime: c.lastVisitTime,
           visits: counts[j],
@@ -352,6 +357,17 @@ async function buildHistoryEntries(periodMs, isCurrent) {
 
   entries.sort((a, b) => b.lastVisitTime - a.lastVisitTime);
   return entries;
+}
+
+// O ícone do site sai da raiz do host: páginas internas podem trocar o favicon
+// (status de pipeline, contador de não lidas). Entre várias raízes, vale a mais recente
+function buildHostIconPages(entries) {
+  const pages = new Map();
+  for (const { url, rawUrl } of entries) {
+    const host = url.host.replace(/^www\./, '');
+    if (!pages.has(host) && isRootUrl(url, 0)) pages.set(host, rawUrl);
+  }
+  return pages;
 }
 
 // Invalida o carregamento em andamento e mostra o estado de carregamento.
@@ -383,20 +399,29 @@ async function loadHistory() {
 
   if (loadId !== historyLoadId) return;
   historyEntries = entries;
+  hostIconPages = buildHostIconPages(entries);
   renderDashboard();
 }
 
 // --- Processamento do Histórico ---
 
-// Acumula visitas e candidatos a título; resolveAggregate reduz a { name, url, count, title }.
-// matched indica se alguma URL do item casou com a busca
-function newAggregate(name, url, allowTitleFallback) {
-  return { name, url, count: 0, allowTitleFallback, rootTitle: '', topTitle: '', topTitleVisits: 0, matched: false };
+// Acumula visitas e candidatos a título e a página do ícone; resolveAggregate reduz a
+// { name, url, count, title, iconPageUrl }. matched indica se alguma URL do item casou com a busca
+function newAggregate(name, url, allowFallback, hostIconPage) {
+  return {
+    name, url, count: 0, allowFallback, hostIconPage, rootTitle: '', topTitle: '', topTitleVisits: 0,
+    rootPageUrl: '', topPageUrl: '', topPageVisits: 0, matched: false
+  };
 }
 
-function trackVisit(target, title, visits, isRoot, matched) {
+function trackVisit(target, pageUrl, title, visits, isRoot, matched) {
   target.count += visits;
   if (matched) target.matched = true;
+  if (isRoot && !target.rootPageUrl) target.rootPageUrl = pageUrl;
+  if (visits > target.topPageVisits) {
+    target.topPageUrl = pageUrl;
+    target.topPageVisits = visits;
+  }
   if (!title) return;
   if (isRoot && !target.rootTitle) target.rootTitle = title;
   if (visits > target.topTitleVisits) {
@@ -405,10 +430,14 @@ function trackVisit(target, title, visits, isRoot, matched) {
   }
 }
 
-// Repositórios usam só o título da raiz; domínios caem para o da página mais visitada
-function resolveAggregate({ name, url, count, allowTitleFallback, rootTitle, topTitle }) {
-  const title = rootTitle || (allowTitleFallback ? topTitle : '');
-  return { name, url, count, title: title === name ? '' : title };
+// Repositórios usam só o título da raiz; domínios caem para o da página mais visitada.
+// O ícone segue a mesma regra, mas prefere a raiz do host: num repositório, as páginas de
+// PR, MR e pipeline trocam o favicon pelo status do CI. Sem nenhuma raiz visitada, o
+// Chrome procura um ícone qualquer do host a partir da URL do próprio item
+function resolveAggregate({ name, url, count, allowFallback, hostIconPage, rootTitle, topTitle, rootPageUrl, topPageUrl }) {
+  const title = rootTitle || (allowFallback ? topTitle : '');
+  const iconPageUrl = hostIconPage || rootPageUrl || (allowFallback ? topPageUrl : '') || url;
+  return { name, url, count, title: title === name ? '' : title, iconPageUrl };
 }
 
 // Com busca ativa, descarta os itens sem nenhuma URL encontrada
@@ -452,7 +481,7 @@ function categorizeHistory(entries) {
   // Contagens, títulos e agrupamentos consideram todo o histórico; a busca só decide o que aparece
   const filtering = searchTerms.length > 0;
 
-  for (const { url, title, visits, searchText, hostname, repoInfo, domainKey, key } of classified) {
+  for (const { url, rawUrl, title, visits, searchText, hostname, repoInfo, domainKey, key } of classified) {
     const matched = !filtering || matchesSearch(searchText);
 
     const groupIndex = groupIndexByKey.get(key);
@@ -470,13 +499,13 @@ function categorizeHistory(entries) {
       }
       // Nos agrupamentos do usuário, o caminho completo evita ambiguidade entre donos
       const name = urlGroup ? repoInfo.fullPath : repoInfo.repoName;
-      aggregate = bucket.get(key) || newAggregate(name, repoInfo.repoUrl, false);
-      trackVisit(aggregate, stripRepoTitle(title, repoInfo.fullPath), visits, repoInfo.isRoot, matched);
+      aggregate = bucket.get(key) || newAggregate(name, repoInfo.repoUrl, false, hostIconPages.get(domainKey));
+      trackVisit(aggregate, rawUrl, stripRepoTitle(title, repoInfo.fullPath), visits, repoInfo.isRoot, matched);
     } else {
       // Demais domínios: agrupa por host + porta; o link usa a origem do acesso mais recente
       bucket = urlGroup ? userGroups.get(urlGroup.id) : domainCounts;
-      aggregate = bucket.get(key) || newAggregate(domainKey, url.origin, true);
-      trackVisit(aggregate, title, visits, isRootUrl(url, 0), matched);
+      aggregate = bucket.get(key) || newAggregate(domainKey, url.origin, true, hostIconPages.get(domainKey));
+      trackVisit(aggregate, rawUrl, title, visits, isRootUrl(url, 0), matched);
     }
 
     bucket.set(key, aggregate);
@@ -511,11 +540,31 @@ function renderMessage(container, text) {
   container.replaceChildren(div);
 }
 
-function createItemCard({ name, url, count, title }) {
+// Lê o cache local de favicons do Chrome (permissão "favicon"), sem nenhuma requisição externa;
+// sem ícone em cache, o Chrome devolve o globo padrão. O dobro do tamanho exibido (32px nos
+// cards), para ficar nítido em telas HiDPI quando o site oferece um ícone maior
+function faviconUrl(pageUrl) {
+  const params = new URLSearchParams({ pageUrl, size: '64' });
+  return chrome.runtime.getURL(`/_favicon/?${params}`);
+}
+
+function createFavicon(pageUrl) {
+  const img = document.createElement('img');
+  img.className = 'item-icon';
+  img.src = faviconUrl(pageUrl);
+  img.alt = '';
+  img.loading = 'lazy';
+  return img;
+}
+
+function createItemCard({ name, url, count, title, iconPageUrl }) {
   const a = document.createElement('a');
   a.className = 'item-card';
   a.href = url;
   a.title = title ? `${title}\n${url}` : url;
+
+  const mainEl = document.createElement('span');
+  mainEl.className = 'item-main';
 
   const textEl = document.createElement('span');
   textEl.className = 'item-text';
@@ -536,7 +585,8 @@ function createItemCard({ name, url, count, title }) {
   countEl.className = 'item-count';
   countEl.textContent = count;
 
-  a.append(textEl, countEl);
+  mainEl.append(createFavicon(iconPageUrl), textEl);
+  a.append(mainEl, countEl);
   return a;
 }
 
@@ -647,7 +697,13 @@ function renderModalList() {
 
   listEl.replaceChildren(...currentGitHosts.map(domain => {
     const label = document.createElement('span');
-    label.textContent = domain;
+    label.className = 'tag-label';
+
+    const nameEl = document.createElement('span');
+    nameEl.textContent = domain;
+
+    // Sem a raiz no histórico, o Chrome procura um ícone qualquer do host
+    label.append(createFavicon(hostIconPages.get(domain) || `https://${domain}/`), nameEl);
     return createTagItem(label, () => saveGitHosts(hosts => hosts.filter(h => h !== domain)));
   }));
 }
