@@ -61,9 +61,25 @@
     .btn-primary:hover {
       background: #7dd3fc;
     }
+    [hidden] {
+      display: none !important;
+    }
+    .header-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .url-groups {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .url-groups .project-group {
+      margin-bottom: 0;
+    }
     .grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 2rem;
     }
     .section-title {
@@ -171,6 +187,7 @@
     }
     .input-row input {
       flex: 1;
+      min-width: 0;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -199,6 +216,24 @@
       border: 1px solid var(--border);
       font-size: 0.9rem;
     }
+    .tag-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      gap: 0.15rem;
+    }
+    .tag-text code {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .modal-help {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: -0.5rem;
+    }
     .btn-delete {
       background: transparent;
       border: none;
@@ -222,8 +257,16 @@
   <div class="container">
     <header>
       <h1>Visão Geral do Mês</h1>
-      <button id="open-settings-btn" class="btn">⚙ Configurar Git</button>
+      <div class="header-actions">
+        <button id="open-groups-btn" class="btn">▦ Agrupamentos</button>
+        <button id="open-settings-btn" class="btn">⚙ Configurar Git</button>
+      </div>
     </header>
+
+    <section id="url-groups-section" hidden>
+      <div class="section-title">Agrupamentos</div>
+      <div id="url-groups" class="url-groups"></div>
+    </section>
 
     <div class="grid">
       <div>
@@ -239,7 +282,7 @@
 
   <dialog id="settings-dialog">
     <h2>Domínios Git Monitorados</h2>
-    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -0.5rem;">
+    <p class="modal-help">
       Adicione hosts públicos ou internos (ex: <code>gitlab.corp.local</code>, <code>git.interno.com</code>).
     </p>
 
@@ -253,6 +296,27 @@
 
     <div class="modal-actions">
       <button id="close-settings-btn" class="btn">Fechar</button>
+    </div>
+  </dialog>
+
+  <dialog id="groups-dialog">
+    <h2>Agrupamentos</h2>
+    <p class="modal-help">
+      Junte domínios e repositórios sob um título pelo trecho do endereço (ex: <code>openshift</code>, <code>.prevnet</code>).
+      Basta uma URL casar para o domínio ou repositório inteiro entrar no agrupamento; se casar com mais de um, vale o primeiro da lista.
+    </p>
+
+    <div class="input-row">
+      <input type="text" id="group-title-input" placeholder="Título" autocomplete="off" />
+      <input type="text" id="group-pattern-input" placeholder="Trecho da URL" autocomplete="off" />
+      <button id="add-group-btn" class="btn btn-primary">Adicionar</button>
+    </div>
+    <p id="groups-error" class="error-msg" hidden></p>
+
+    <div id="registered-groups" class="tag-list"></div>
+
+    <div class="modal-actions">
+      <button id="close-groups-btn" class="btn">Fechar</button>
     </div>
   </dialog>
 

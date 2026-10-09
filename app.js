@@ -23,6 +23,9 @@ const GIT_STOP_KEYWORDS = new Set([
 
 let currentGitHosts = [...DEFAULT_GIT_HOSTS];
 
+// Agrupamentos do usuário: [{ id, title, pattern }]; a primeira regra que casar vence
+let currentUrlGroups = [];
+
 // Cache do histórico já processado: [{ url: URL, visits }], do acesso mais recente ao mais antigo
 let historyEntries = null;
 
@@ -70,6 +73,10 @@ function stripRepoTitle(title, fullPath) {
   return result.trim();
 }
 
+function normalizePattern(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
 function parseWebUrl(rawUrl) {
   if (!rawUrl) return null;
 
@@ -88,6 +95,16 @@ function parseWebUrl(rawUrl) {
 
 // --- Gerenciamento de Configurações (Storage) ---
 
+// Serializa as gravações: cada uma calcula a nova lista a partir do que a anterior salvou,
+// evitando que cliques rápidos sobrescrevam uns aos outros
+let saveQueue = Promise.resolve();
+
+function enqueueSave(task) {
+  const run = saveQueue.then(task);
+  saveQueue = run.catch(() => {});
+  return run;
+}
+
 async function loadGitHosts() {
   try {
     const data = await chrome.storage.sync.get({ gitHosts: DEFAULT_GIT_HOSTS });
@@ -100,20 +117,76 @@ async function loadGitHosts() {
   return currentGitHosts;
 }
 
-async function saveGitHosts(hosts) {
-  try {
-    await chrome.storage.sync.set({ gitHosts: hosts });
-  } catch (e) {
-    console.error('Falha ao salvar hosts Git:', e);
-    showSettingsError(`Não foi possível salvar: ${e.message}`);
-    return false;
-  }
+function saveGitHosts(update) {
+  return enqueueSave(async () => {
+    const hosts = update(currentGitHosts);
+    if (hosts === currentGitHosts) return true;
 
-  showSettingsError('');
-  currentGitHosts = hosts;
-  renderModalList();
-  renderDashboard();
-  return true;
+    try {
+      await chrome.storage.sync.set({ gitHosts: hosts });
+    } catch (e) {
+      console.error('Falha ao salvar hosts Git:', e);
+      showDialogError('settings-error', `Não foi possível salvar: ${e.message}`);
+      return false;
+    }
+
+    showDialogError('settings-error', '');
+    currentGitHosts = hosts;
+    renderModalList();
+    renderDashboard();
+    return true;
+  });
+}
+
+async function loadUrlGroups() {
+  try {
+    const data = await chrome.storage.sync.get({ urlGroups: [] });
+    const stored = Array.isArray(data.urlGroups) ? data.urlGroups : [];
+    const seenIds = new Set();
+    const seenPatterns = new Set();
+
+    currentUrlGroups = [];
+    for (const g of stored) {
+      if (!g || typeof g.title !== 'string' || typeof g.pattern !== 'string') continue;
+
+      const title = g.title.trim();
+      const pattern = normalizePattern(g.pattern);
+      if (!title || !pattern || seenPatterns.has(pattern)) continue;
+
+      // IDs repetidos (edição manual ou merge entre dispositivos) ganham um novo
+      let id = String(g.id || '');
+      if (!id || seenIds.has(id)) id = crypto.randomUUID();
+
+      seenIds.add(id);
+      seenPatterns.add(pattern);
+      currentUrlGroups.push({ id, title, pattern });
+    }
+  } catch (e) {
+    console.error('Falha ao carregar agrupamentos:', e);
+    currentUrlGroups = [];
+  }
+  return currentUrlGroups;
+}
+
+function saveUrlGroups(update) {
+  return enqueueSave(async () => {
+    const groups = update(currentUrlGroups);
+    if (groups === currentUrlGroups) return true;
+
+    try {
+      await chrome.storage.sync.set({ urlGroups: groups });
+    } catch (e) {
+      console.error('Falha ao salvar agrupamentos:', e);
+      showDialogError('groups-error', `Não foi possível salvar: ${e.message}`);
+      return false;
+    }
+
+    showDialogError('groups-error', '');
+    currentUrlGroups = groups;
+    renderGroupsModalList();
+    renderDashboard();
+    return true;
+  });
 }
 
 function parseGitRepository(url) {
@@ -212,6 +285,8 @@ async function buildHistoryEntries() {
 }
 
 async function loadHistory() {
+  updateUrlGroupsVisibility();
+  renderMessage(document.getElementById('url-groups'), 'Carregando…');
   renderMessage(document.getElementById('git-repos'), 'Carregando…');
   renderMessage(document.getElementById('top-domains'), 'Carregando…');
 
@@ -219,6 +294,7 @@ async function loadHistory() {
     historyEntries = await buildHistoryEntries();
   } catch (e) {
     console.error('Falha ao carregar histórico:', e);
+    renderMessage(document.getElementById('url-groups'), 'Erro ao carregar o histórico.');
     renderMessage(document.getElementById('git-repos'), 'Erro ao carregar o histórico.');
     renderMessage(document.getElementById('top-domains'), 'Erro ao carregar o histórico.');
     return;
@@ -230,8 +306,8 @@ async function loadHistory() {
 // --- Processamento do Histórico ---
 
 // Acumula visitas e candidatos a título; resolveAggregate reduz a { name, url, count, title }
-function newAggregate(name, url) {
-  return { name, url, count: 0, rootTitle: '', topTitle: '', topTitleVisits: 0 };
+function newAggregate(name, url, allowTitleFallback) {
+  return { name, url, count: 0, allowTitleFallback, rootTitle: '', topTitle: '', topTitleVisits: 0 };
 }
 
 function trackVisit(target, title, visits, isRoot) {
@@ -245,56 +321,86 @@ function trackVisit(target, title, visits, isRoot) {
 }
 
 // Repositórios usam só o título da raiz; domínios caem para o da página mais visitada
-function resolveAggregate({ name, url, count, rootTitle, topTitle }, allowFallback) {
-  const title = rootTitle || (allowFallback ? topTitle : '');
+function resolveAggregate({ name, url, count, allowTitleFallback, rootTitle, topTitle }) {
+  const title = rootTitle || (allowTitleFallback ? topTitle : '');
   return { name, url, count, title: title === name ? '' : title };
+}
+
+function resolveBucket(bucket) {
+  for (const [key, aggregate] of bucket) bucket.set(key, resolveAggregate(aggregate));
+}
+
+// Casa o trecho só com host + caminho, para que query e hash (buscas, redirects) não contem
+function findUrlGroupIndex(url) {
+  if (currentUrlGroups.length === 0) return -1;
+  const haystack = safeDecode(url.host + url.pathname).toLowerCase();
+  return currentUrlGroups.findIndex(g => haystack.includes(g.pattern));
 }
 
 function categorizeHistory(entries) {
   const gitHosts = new Set(currentGitHosts);
+  const userGroups = new Map(currentUrlGroups.map(g => [g.id, new Map()]));
   const projectGroups = new Map();
   const domainCounts = new Map();
 
-  for (const { url, title, visits } of entries) {
-    const hostname = url.hostname.replace(/^www\./, '');
+  const classified = entries.map(entry => {
+    const hostname = entry.url.hostname.replace(/^www\./, '');
+    const repoInfo = gitHosts.has(hostname) ? parseGitRepository(entry.url) : null;
+    const domainKey = entry.url.host.replace(/^www\./, '');
+    const key = repoInfo ? `repo:${repoInfo.uniqueKey}` : `domain:${domainKey}`;
+    return { ...entry, hostname, repoInfo, domainKey, key, groupIndex: findUrlGroupIndex(entry.url) };
+  });
 
-    if (gitHosts.has(hostname)) {
-      const repoInfo = parseGitRepository(url);
-      if (repoInfo) {
+  // O agrupamento é decidido por repositório/domínio, não por URL: se qualquer URL casar,
+  // o item inteiro vai para o agrupamento (o de menor posição na lista, se houver vários)
+  const groupIndexByKey = new Map();
+  for (const { key, groupIndex } of classified) {
+    if (groupIndex < 0) continue;
+    const previous = groupIndexByKey.get(key);
+    if (previous === undefined || groupIndex < previous) groupIndexByKey.set(key, groupIndex);
+  }
+
+  for (const { url, title, visits, hostname, repoInfo, domainKey, key } of classified) {
+    const groupIndex = groupIndexByKey.get(key);
+    const urlGroup = groupIndex === undefined ? null : currentUrlGroups[groupIndex];
+
+    let bucket, aggregate;
+
+    if (repoInfo) {
+      if (urlGroup) {
+        bucket = userGroups.get(urlGroup.id);
+      } else {
         const groupKey = `${hostname} › ${repoInfo.projectGroup}`;
-
-        if (!projectGroups.has(groupKey)) {
-          projectGroups.set(groupKey, new Map());
-        }
-
-        const groupRepos = projectGroups.get(groupKey);
-        const current = groupRepos.get(repoInfo.uniqueKey) ||
-          newAggregate(repoInfo.repoName, repoInfo.repoUrl);
-        trackVisit(current, stripRepoTitle(title, repoInfo.fullPath), visits, repoInfo.isRoot);
-        groupRepos.set(repoInfo.uniqueKey, current);
-        continue;
+        if (!projectGroups.has(groupKey)) projectGroups.set(groupKey, new Map());
+        bucket = projectGroups.get(groupKey);
       }
+      // Nos agrupamentos do usuário, o caminho completo evita ambiguidade entre donos
+      const name = urlGroup ? repoInfo.fullPath : repoInfo.repoName;
+      aggregate = bucket.get(key) || newAggregate(name, repoInfo.repoUrl, false);
+      trackVisit(aggregate, stripRepoTitle(title, repoInfo.fullPath), visits, repoInfo.isRoot);
+    } else {
+      // Demais domínios: agrupa por host + porta; o link usa a origem do acesso mais recente
+      bucket = urlGroup ? userGroups.get(urlGroup.id) : domainCounts;
+      aggregate = bucket.get(key) || newAggregate(domainKey, url.origin, true);
+      trackVisit(aggregate, title, visits, isRootUrl(url, 0));
     }
 
-    // Demais domínios: agrupa por host + porta; o link usa a origem do acesso mais recente
-    const domainKey = url.host.replace(/^www\./, '');
-    const currentDomain = domainCounts.get(domainKey) || newAggregate(domainKey, url.origin);
-    trackVisit(currentDomain, title, visits, isRootUrl(url, 0));
-    domainCounts.set(domainKey, currentDomain);
+    bucket.set(key, aggregate);
   }
 
-  for (const groupRepos of projectGroups.values()) {
-    for (const [key, repo] of groupRepos) groupRepos.set(key, resolveAggregate(repo, false));
-  }
-  for (const [key, domain] of domainCounts) domainCounts.set(key, resolveAggregate(domain, true));
+  for (const bucket of userGroups.values()) resolveBucket(bucket);
+  for (const bucket of projectGroups.values()) resolveBucket(bucket);
+  resolveBucket(domainCounts);
 
-  return { projectGroups, domainCounts };
+  return { userGroups, projectGroups, domainCounts };
 }
 
 function renderDashboard() {
+  updateUrlGroupsVisibility();
   if (!historyEntries) return;
 
-  const { projectGroups, domainCounts } = categorizeHistory(historyEntries);
+  const { userGroups, projectGroups, domainCounts } = categorizeHistory(historyEntries);
+  renderUrlGroups(userGroups);
   renderCategorizedRepos(projectGroups);
   renderTopDomains(domainCounts);
 }
@@ -337,6 +443,43 @@ function createItemCard({ name, url, count, title }) {
   return a;
 }
 
+function sortByCount(bucket) {
+  return Array.from(bucket.values()).sort((a, b) => b.count - a.count);
+}
+
+function createGroupBlock(title, items, emptyMessage) {
+  const groupBlock = document.createElement('div');
+  groupBlock.className = 'project-group';
+
+  const groupTitle = document.createElement('div');
+  groupTitle.className = 'project-group-title';
+  groupTitle.textContent = title;
+  groupBlock.appendChild(groupTitle);
+
+  const list = document.createElement('div');
+  list.className = 'sub-list';
+  if (items.length === 0) {
+    renderMessage(list, emptyMessage);
+  } else {
+    list.append(...items.slice(0, 5).map(createItemCard));
+  }
+
+  groupBlock.appendChild(list);
+  return groupBlock;
+}
+
+function updateUrlGroupsVisibility() {
+  document.getElementById('url-groups-section').hidden = currentUrlGroups.length === 0;
+}
+
+function renderUrlGroups(userGroups) {
+  const container = document.getElementById('url-groups');
+
+  container.replaceChildren(...currentUrlGroups.map(group =>
+    createGroupBlock(group.title, sortByCount(userGroups.get(group.id)), 'Nenhum acesso no último mês.')
+  ));
+}
+
 function renderCategorizedRepos(projectGroups) {
   const container = document.getElementById('git-repos');
 
@@ -345,44 +488,24 @@ function renderCategorizedRepos(projectGroups) {
     return;
   }
 
-  container.replaceChildren();
-
   const sortedGroups = Array.from(projectGroups.entries())
     .map(([groupName, reposMap]) => {
-      const repos = Array.from(reposMap.values()).sort((a, b) => b.count - a.count);
+      const repos = sortByCount(reposMap);
       const totalVisits = repos.reduce((acc, r) => acc + r.count, 0);
       return { groupName, repos, totalVisits };
     })
     .sort((a, b) => b.totalVisits - a.totalVisits)
     .slice(0, 8);
 
-  for (const group of sortedGroups) {
-    const groupBlock = document.createElement('div');
-    groupBlock.className = 'project-group';
-
-    const groupTitle = document.createElement('div');
-    groupTitle.className = 'project-group-title';
-    groupTitle.textContent = group.groupName;
-    groupBlock.appendChild(groupTitle);
-
-    const repoList = document.createElement('div');
-    repoList.className = 'sub-list';
-
-    for (const repo of group.repos.slice(0, 5)) {
-      repoList.appendChild(createItemCard(repo));
-    }
-
-    groupBlock.appendChild(repoList);
-    container.appendChild(groupBlock);
-  }
+  container.replaceChildren(...sortedGroups.map(group =>
+    createGroupBlock(group.groupName, group.repos, '')
+  ));
 }
 
 function renderTopDomains(domainCounts) {
   const container = document.getElementById('top-domains');
 
-  const top = Array.from(domainCounts.values())
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 15);
+  const top = sortByCount(domainCounts).slice(0, 15);
 
   if (top.length === 0) {
     renderMessage(container, 'Nenhum domínio registrado.');
@@ -392,50 +515,73 @@ function renderTopDomains(domainCounts) {
   container.replaceChildren(...top.map(createItemCard));
 }
 
-// --- Controles do Modal de Configuração ---
+// --- Controles dos Modais ---
 
-function showSettingsError(message) {
-  const el = document.getElementById('settings-error');
+function showDialogError(id, message) {
+  const el = document.getElementById(id);
   el.textContent = message;
   el.hidden = !message;
 }
 
-function renderModalList() {
-  const listEl = document.getElementById('registered-domains');
-  listEl.replaceChildren();
+function createTagItem(contentEl, onDelete) {
+  const div = document.createElement('div');
+  div.className = 'tag-item';
 
-  for (const domain of currentGitHosts) {
-    const div = document.createElement('div');
-    div.className = 'tag-item';
+  const btn = document.createElement('button');
+  btn.className = 'btn-delete';
+  btn.title = 'Remover';
+  btn.textContent = '×';
+  btn.addEventListener('click', onDelete);
 
-    const label = document.createElement('span');
-    label.textContent = domain;
-
-    const btn = document.createElement('button');
-    btn.className = 'btn-delete';
-    btn.title = 'Remover';
-    btn.textContent = '×';
-    btn.addEventListener('click', () => {
-      saveGitHosts(currentGitHosts.filter(h => h !== domain));
-    });
-
-    div.append(label, btn);
-    listEl.appendChild(div);
-  }
+  div.append(contentEl, btn);
+  return div;
 }
 
-function setupModalListeners() {
-  const dialog = document.getElementById('settings-dialog');
-  const openBtn = document.getElementById('open-settings-btn');
-  const closeBtn = document.getElementById('close-settings-btn');
-  const addBtn = document.getElementById('add-domain-btn');
-  const input = document.getElementById('domain-input');
+function renderModalList() {
+  const listEl = document.getElementById('registered-domains');
 
+  listEl.replaceChildren(...currentGitHosts.map(domain => {
+    const label = document.createElement('span');
+    label.textContent = domain;
+    return createTagItem(label, () => saveGitHosts(hosts => hosts.filter(h => h !== domain)));
+  }));
+}
+
+function renderGroupsModalList() {
+  const listEl = document.getElementById('registered-groups');
+
+  if (currentUrlGroups.length === 0) {
+    renderMessage(listEl, 'Nenhum agrupamento cadastrado.');
+    return;
+  }
+
+  listEl.replaceChildren(...currentUrlGroups.map(group => {
+    const content = document.createElement('span');
+    content.className = 'tag-text';
+
+    const titleEl = document.createElement('strong');
+    titleEl.textContent = group.title;
+
+    const patternEl = document.createElement('code');
+    patternEl.textContent = group.pattern;
+
+    content.append(titleEl, patternEl);
+    return createTagItem(content, () => saveUrlGroups(groups => groups.filter(g => g.id !== group.id)));
+  }));
+}
+
+// Ignora o Enter que confirma uma composição de IME (acentos, etc.)
+function onEnter(input, handler) {
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) handler();
+  });
+}
+
+function setupDialog(dialog, openBtn, closeBtn, focusEl, onOpen) {
   openBtn.addEventListener('click', () => {
-    showSettingsError('');
-    renderModalList();
+    onOpen();
     dialog.showModal();
-    input.focus();
+    focusEl.focus();
   });
 
   closeBtn.addEventListener('click', () => dialog.close());
@@ -448,35 +594,94 @@ function setupModalListeners() {
       e.clientY >= rect.top && e.clientY <= rect.bottom;
     if (!inside) dialog.close();
   });
+}
+
+function setupGitHostsModal() {
+  const input = document.getElementById('domain-input');
+
+  setupDialog(
+    document.getElementById('settings-dialog'),
+    document.getElementById('open-settings-btn'),
+    document.getElementById('close-settings-btn'),
+    input,
+    () => {
+      showDialogError('settings-error', '');
+      renderModalList();
+    }
+  );
 
   const handleAdd = async () => {
     if (!input.value.trim()) return;
 
     const host = normalizeHost(input.value);
     if (!host) {
-      showSettingsError('Domínio inválido.');
+      showDialogError('settings-error', 'Domínio inválido.');
       return;
     }
 
     if (currentGitHosts.includes(host)) {
       input.value = '';
-      showSettingsError('');
+      showDialogError('settings-error', '');
       return;
     }
 
-    if (await saveGitHosts([...currentGitHosts, host])) {
+    if (await saveGitHosts(hosts => hosts.includes(host) ? hosts : [...hosts, host])) {
       input.value = '';
     }
   };
 
-  addBtn.addEventListener('click', handleAdd);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleAdd();
-  });
+  document.getElementById('add-domain-btn').addEventListener('click', handleAdd);
+  onEnter(input, handleAdd);
+}
+
+function setupUrlGroupsModal() {
+  const titleInput = document.getElementById('group-title-input');
+  const patternInput = document.getElementById('group-pattern-input');
+
+  setupDialog(
+    document.getElementById('groups-dialog'),
+    document.getElementById('open-groups-btn'),
+    document.getElementById('close-groups-btn'),
+    titleInput,
+    () => {
+      showDialogError('groups-error', '');
+      renderGroupsModalList();
+    }
+  );
+
+  const handleAdd = async () => {
+    const title = titleInput.value.trim();
+    const pattern = normalizePattern(patternInput.value);
+
+    if (!title || !pattern) {
+      showDialogError('groups-error', 'Informe o título e o trecho da URL.');
+      return;
+    }
+
+    if (currentUrlGroups.some(g => g.pattern === pattern)) {
+      showDialogError('groups-error', 'Já existe um agrupamento com este trecho.');
+      return;
+    }
+
+    const group = { id: crypto.randomUUID(), title, pattern };
+    const added = await saveUrlGroups(groups =>
+      groups.some(g => g.pattern === pattern) ? groups : [...groups, group]
+    );
+    if (added) {
+      titleInput.value = '';
+      patternInput.value = '';
+      titleInput.focus();
+    }
+  };
+
+  document.getElementById('add-group-btn').addEventListener('click', handleAdd);
+  onEnter(titleInput, () => patternInput.focus());
+  onEnter(patternInput, handleAdd);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  setupModalListeners();
-  await loadGitHosts();
+  setupGitHostsModal();
+  setupUrlGroupsModal();
+  await Promise.all([loadGitHosts(), loadUrlGroups()]);
   await loadHistory();
 });
