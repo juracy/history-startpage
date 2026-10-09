@@ -52,6 +52,24 @@ Para adicionar instâncias corporativas ou self-hosted:
 4. Pressione Enter ou clique em **Adicionar**.
 5. O painel reprocessará seu histórico automaticamente com os novos agrupamentos.
 
+## ⌨️ Atalhos de Teclado
+
+| Atalho | Ação |
+| --- | --- |
+| `Shift+F6` | Leva o foco da barra de endereço para a busca do painel (o `F6` também funciona, mas passa antes pela faixa de abas). |
+| `/` | Foca a busca de qualquer ponto da página. |
+| `Esc` | Limpa a busca. |
+| `Alt+T` | Abre o painel numa nova aba com o cursor já na busca. |
+
+### O `Alt+T` não funciona
+
+O `Alt+T` é apenas o atalho **sugerido** pela extensão, e o Chrome pode não atribuí-lo, sem nenhum aviso. Isso acontece quando outra extensão do mesmo perfil já usa a combinação e também foi observado ao recarregar uma versão anterior da extensão, que ainda não tinha o atalho. Como cada perfil do Chrome tem suas próprias extensões e atalhos, ele pode funcionar num perfil e não em outro.
+
+Para corrigir:
+1. Acesse `chrome://extensions/shortcuts` no perfil afetado.
+2. Localize **Abrir o painel com o foco na busca**. Se o campo estiver vazio, clique no lápis e pressione `Alt+T` (ou outra combinação de sua preferência).
+3. Se o Chrome informar que o atalho já está em uso, a extensão que o ocupa aparece na mesma página; escolha outra combinação para uma das duas.
+
 ## 📄 Licença
 
 MIT
