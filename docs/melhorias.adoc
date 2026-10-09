@@ -1,0 +1,183 @@
+= Sugestões de melhorias
+:toc: macro
+:toc-title: Conteúdo
+:icons: font
+
+Análise funcional e de usabilidade da extensão, feita em outubro de 2026 sobre a versão 1.4.0.
+Dentro de cada seção, os itens estão em ordem decrescente de impacto.
+
+toc::[]
+
+== Ordem recomendada
+
+. Corrigir a classificação de repositórios Git (<<git>>): é correção de dados e tem custo baixo.
+. Navegação por teclado nos resultados e foco visível nos cards (<<teclado>>, <<a11y>>).
+. Editar e reordenar agrupamentos (<<agrupamentos>>).
+. Ocultar itens (<<ocultar>>).
+. "Ver mais" e resultados completos durante a busca (<<ver-mais>>).
+
+[[git]]
+== Problemas na classificação de repositórios Git
+
+=== Gitea, Forgejo, Bitbucket e Azure DevOps
+
+O README declara suporte a Gitea e Forgejo, mas esses hosts usam `/owner/repo/src/branch/main/...`, e `src` não está em `GIT_STOP_KEYWORDS` (`app.js`).
+
+.Exemplo
+`gitea.com/owner/repo/src/branch/main/README.md` vira o "repositório" `README.md` dentro do grupo `owner/repo/src/branch/main`.
+
+Faltam, entre outras, as palavras de parada:
+
+* `src`: Gitea, Forgejo e Bitbucket;
+* `pull-requests`: Bitbucket;
+* `_git`: Azure DevOps (`dev.azure.com/org/projeto/_git/repo`), que também precisaria de tratamento próprio da estrutura do caminho.
+
+=== Páginas do próprio host tratadas como repositório
+
+Como os dois primeiros segmentos do caminho nunca são cortados (`parseGitRepository`), páginas de navegação do host viram repositórios falsos:
+
+[cols="2,3"]
+|===
+|URL |Resultado atual
+
+|`github.com/settings/profile`
+|repositório `profile` no grupo `settings`
+
+|`github.com/orgs/acme/repositories`
+|repositório `repositories` no grupo `orgs/acme`
+
+|`gitlab.com/dashboard/merge_requests`
+|repositório `merge_requests` no grupo `dashboard`
+
+|`gitlab.com/-/user_settings/profile`
+|repositório `profile` no grupo `-/user_settings`
+|===
+
+Uma lista de primeiros segmentos reservados resolveria: `settings`, `orgs`, `users`, `dashboard`, `explore`, `-`, `groups`, `marketplace`, `notifications`, `new` e `login`.
+URLs com esses prefixos passariam a contar para o domínio do host, como já acontece com URLs de um único segmento.
+
+== Funcionalidades
+
+[[agrupamentos]]
+=== Editar e reordenar agrupamentos
+
+Hoje só é possível remover e recriar.
+Como a regra é "o primeiro da lista vence", a ordem tem efeito real sobre o painel, e não há como alterá-la.
+Também seria útil editar o título e o trecho da URL de um agrupamento existente.
+
+[[ocultar]]
+=== Ocultar itens
+
+Não há como tirar do painel domínios como buscador, webmail ou páginas de login da intranet.
+`EXCLUDED_HOSTS` é fixo no código.
+
+Proposta: um botão de ocultar no card e uma lista de exclusões em `chrome.storage.sync`, editável numa tela de configurações.
+
+=== Fixar favoritos
+
+Itens fixados que apareceriam sempre, independentemente do histórico do período.
+
+[[ver-mais]]
+=== "Ver mais" nos limites fixos
+
+Os limites estão fixos no código: 5 repositórios por grupo, 8 grupos de repositórios e 15 domínios.
+Durante a busca, o corte esconde resultados sem nenhum aviso.
+
+Opções:
+
+* expandir o grupo com um clique ("ver mais");
+* não aplicar limite quando há busca ativa.
+
+=== Busca que encontra uma página interna
+
+Se a busca casa com uma página interna (um PR, por exemplo), o card leva à raiz do repositório.
+Seria melhor mostrar as páginas que casaram como sublinks do card, ou ter uma seção "Páginas" durante a busca.
+
+=== Ordenar por recência ou "frecency"
+
+Hoje a ordenação considera só o número de visitas.
+O `lastVisitTime` já está em cada entrada do cache, então ordenar por recência, ou por uma combinação de frequência e recência, não exige dados novos.
+
+=== Exportar e importar a configuração
+
+Exportar e importar hosts Git, agrupamentos e período em JSON.
+
+Também vale tratar o limite de 8 KB por item do `chrome.storage.sync` (`QUOTA_BYTES_PER_ITEM`): com muitos agrupamentos, a chave `urlGroups` pode estourar, e hoje a falha só aparece como erro genérico no modal.
+
+=== Restaurar os hosts Git padrão
+
+Se o usuário remover `github.com` ou `gitlab.com`, hoje só consegue recolocá-los digitando.
+
+== Usabilidade
+
+[[teclado]]
+=== Navegar e abrir resultados pelo teclado
+
+O painel já tem bons atalhos para chegar à busca (`Alt+T`, `/` e `Shift+F6`), mas depois de digitar ainda é preciso usar o mouse.
+
+Proposta:
+
+* `Enter` abre o primeiro resultado;
+* `↑`/`↓` percorrem os cards;
+* `Ctrl+Enter` abre em segundo plano.
+
+Isso completa o uso do painel como lançador.
+
+=== Destacar os termos encontrados
+
+Realçar os termos da busca no nome e no título dos cards.
+
+=== Mostrar o progresso do carregamento
+
+Hoje aparece só "Carregando…", mas no período de 3 meses o carregamento faz milhares de chamadas a `chrome.history.getVisits`.
+Algo como "Carregando… 1.200 de 4.800 páginas" já ajudaria.
+
+=== Contexto no contador
+
+O número no card não diz o que representa.
+O tooltip poderia mostrar "N visitas no período · último acesso há 2 h".
+
+=== Desfazer remoções
+
+O botão `×` dos hosts Git e dos agrupamentos remove na hora, sem confirmação.
+Um aviso temporário com "Desfazer" é suficiente e não interrompe o fluxo.
+
+=== Unificar as configurações
+
+Os dois modais poderiam virar uma única tela de configurações, também registrada como `options_ui` no `manifest.json`, para abrir a partir de `chrome://extensions`.
+
+[[a11y]]
+== Visual e acessibilidade
+
+=== Layout em telas estreitas
+
+O `.grid` tem sempre duas colunas e o header não quebra linha.
+Em janela dividida ao meio, tudo fica espremido.
+Falta um `@media` que passe para uma coluna.
+
+=== Tema claro
+
+Sem o `theme.css` do matugen, o painel é sempre escuro.
+Falta tratar `prefers-color-scheme: light`.
+
+=== Foco visível nos cards
+
+`.item-card` só tem estilo de `:hover`.
+Um `:focus-visible` equivalente é necessário para a navegação por teclado proposta em <<teclado>>.
+
+=== Rótulos para leitores de tela
+
+* O botão `×` precisa de um `aria-label` com o nome do item ("Remover gitlab.empresa.com").
+* O contador do card precisa de um rótulo textual ("12 visitas").
+
+== Desempenho
+
+=== Cache do resultado processado
+
+Cada nova aba refaz `chrome.history.search` e uma chamada a `getVisits` por URL.
+
+Proposta:
+
+* guardar o resultado em `chrome.storage.session` ou `chrome.storage.local`, com um carimbo de tempo;
+* mostrar o cache na hora e atualizar em segundo plano;
+* opcionalmente, usar `chrome.history.onVisited` no service worker para manter as contagens de forma incremental.
