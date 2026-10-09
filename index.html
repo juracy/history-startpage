@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Início</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-hover: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #334155;
+      --danger: #f87171;
+    }
+    body {
+      margin: 0;
+      padding: 3rem 2rem;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0;
+    }
+    .btn {
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: background 0.15s;
+    }
+    .btn:hover {
+      background: var(--card-hover);
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #0f172a;
+      font-weight: 600;
+      border: none;
+    }
+    .btn-primary:hover {
+      background: #7dd3fc;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+    .section-title {
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    .project-group {
+      margin-bottom: 1.25rem;
+      background: rgba(30, 41, 59, 0.5);
+      border-radius: 8px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+    }
+    .project-group-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+      padding-left: 0.25rem;
+    }
+    .sub-list, .list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .item-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 0.9rem;
+      background: var(--card-bg);
+      border-radius: 6px;
+      text-decoration: none;
+      color: var(--text);
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .item-card:hover {
+      background: var(--card-hover);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .item-name {
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-right: 1rem;
+    }
+    .item-count {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    /* Modal / Dialog */
+    dialog {
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(2px);
+    }
+    dialog h2 {
+      margin-top: 0;
+      font-size: 1.15rem;
+    }
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+      margin: 1rem 0;
+    }
+    .input-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      outline: none;
+    }
+    .input-row input:focus {
+      border-color: var(--accent);
+    }
+    .tag-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-bottom: 1.5rem;
+    }
+    .tag-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg);
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .btn-delete {
+      background: transparent;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0 0.25rem;
+    }
+    .error-msg {
+      color: var(--danger);
+      font-size: 0.85rem;
+      margin: -0.5rem 0 1rem;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Visão Geral do Mês</h1>
+      <button id="open-settings-btn" class="btn">⚙ Configurar Git</button>
+    </header>
+
+    <div class="grid">
+      <div>
+        <div class="section-title">Repositórios Git</div>
+        <div id="git-repos" class="list"></div>
+      </div>
+      <div>
+        <div class="section-title">Domínios Mais Acessados</div>
+        <div id="top-domains" class="list"></div>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="settings-dialog">
+    <h2>Domínios Git Monitorados</h2>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -0.5rem;">
+      Adicione hosts públicos ou internos (ex: <code>gitlab.corp.local</code>, <code>git.interno.com</code>).
+    </p>
+
+    <div class="input-row">
+      <input type="text" id="domain-input" placeholder="ex: gitlab.empresa.com" autocomplete="off" />
+      <button id="add-domain-btn" class="btn btn-primary">Adicionar</button>
+    </div>
+    <p id="settings-error" class="error-msg" hidden></p>
+
+    <div id="registered-domains" class="tag-list"></div>
+
+    <div class="modal-actions">
+      <button id="close-settings-btn" class="btn">Fechar</button>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
