@@ -10,6 +10,8 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Agrupa repositórios por Organização / Workspace / Subgrupo.
 - **Domínios Mais Acessados:**
   - Extrai e consolida o host raiz dos seus sites mais frequentados no mês, evitando poluição de URLs específicas.
+- **Busca Instantânea:**
+  - Filtra repositórios, domínios e agrupamentos enquanto você digita, pela URL ou pelo título das páginas visitadas (sem diferenciar maiúsculas nem acentos; `Esc` limpa).
 - **Configuração Dinâmica in-browser:**
   - Modal nativo para adicionar e remover instâncias Git personalizadas sem editar código.
   - Sincronização via `chrome.storage.sync`.

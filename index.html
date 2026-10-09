@@ -68,6 +68,24 @@
       display: flex;
       gap: 0.5rem;
     }
+    .search-input {
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 2rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.7rem 1rem;
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+    .search-input::placeholder {
+      color: var(--text-muted);
+    }
     .url-groups {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -262,6 +280,9 @@
         <button id="open-settings-btn" class="btn">⚙ Configurar Git</button>
       </div>
     </header>
+
+    <input type="search" id="search-input" class="search-input"
+      placeholder="Buscar por URL ou título…" aria-label="Buscar por URL ou título" autocomplete="off" spellcheck="false" />
 
     <section id="url-groups-section" hidden>
       <div class="section-title">Agrupamentos</div>

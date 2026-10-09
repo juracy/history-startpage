@@ -2,6 +2,7 @@ const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 const HISTORY_PAGE_SIZE = 5000;
 const VISITS_CONCURRENCY = 100;
 const DEFAULT_GIT_HOSTS = ['github.com', 'gitlab.com'];
+const SEARCH_DEBOUNCE_MS = 200;
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -28,6 +29,9 @@ let currentUrlGroups = [];
 
 // Cache do histórico já processado: [{ url: URL, visits }], do acesso mais recente ao mais antigo
 let historyEntries = null;
+
+// Termos da busca já normalizados; vazio = sem filtro
+let searchTerms = [];
 
 // --- Utilitários ---
 
@@ -71,6 +75,20 @@ function stripRepoTitle(title, fullPath) {
     result = normalized.slice(fullPath.length).replace(/^[\s:·|–-]+/, '');
   }
   return result.trim();
+}
+
+// Minúsculas e sem acentos, para que "configuracao" encontre "Configuração"
+function normalizeSearchText(value) {
+  return String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+function parseSearchTerms(value) {
+  return normalizeSearchText(value).split(/\s+/).filter(Boolean);
+}
+
+// Todos os termos precisam aparecer na URL ou no título (em qualquer ordem)
+function matchesSearch(searchText) {
+  return searchTerms.every(term => searchText.includes(term));
 }
 
 function normalizePattern(value) {
@@ -275,7 +293,14 @@ async function buildHistoryEntries() {
     const counts = await Promise.all(batch.map(c => countRecentVisits(c.rawUrl, startTime)));
     batch.forEach((c, j) => {
       if (counts[j] > 0) {
-        entries.push({ url: c.url, title: c.title, lastVisitTime: c.lastVisitTime, visits: counts[j] });
+        entries.push({
+          url: c.url,
+          title: c.title,
+          lastVisitTime: c.lastVisitTime,
+          visits: counts[j],
+          // Como nos agrupamentos, só host + caminho: query e hash (redirects, buscas) não contam
+          searchText: normalizeSearchText(`${safeDecode(c.url.host + c.url.pathname)}\n${c.title}`)
+        });
       }
     });
   }
@@ -305,13 +330,15 @@ async function loadHistory() {
 
 // --- Processamento do Histórico ---
 
-// Acumula visitas e candidatos a título; resolveAggregate reduz a { name, url, count, title }
+// Acumula visitas e candidatos a título; resolveAggregate reduz a { name, url, count, title }.
+// matched indica se alguma URL do item casou com a busca
 function newAggregate(name, url, allowTitleFallback) {
-  return { name, url, count: 0, allowTitleFallback, rootTitle: '', topTitle: '', topTitleVisits: 0 };
+  return { name, url, count: 0, allowTitleFallback, rootTitle: '', topTitle: '', topTitleVisits: 0, matched: false };
 }
 
-function trackVisit(target, title, visits, isRoot) {
+function trackVisit(target, title, visits, isRoot, matched) {
   target.count += visits;
+  if (matched) target.matched = true;
   if (!title) return;
   if (isRoot && !target.rootTitle) target.rootTitle = title;
   if (visits > target.topTitleVisits) {
@@ -326,8 +353,12 @@ function resolveAggregate({ name, url, count, allowTitleFallback, rootTitle, top
   return { name, url, count, title: title === name ? '' : title };
 }
 
+// Com busca ativa, descarta os itens sem nenhuma URL encontrada
 function resolveBucket(bucket) {
-  for (const [key, aggregate] of bucket) bucket.set(key, resolveAggregate(aggregate));
+  for (const [key, aggregate] of bucket) {
+    if (aggregate.matched) bucket.set(key, resolveAggregate(aggregate));
+    else bucket.delete(key);
+  }
 }
 
 // Casa o trecho só com host + caminho, para que query e hash (buscas, redirects) não contem
@@ -360,7 +391,12 @@ function categorizeHistory(entries) {
     if (previous === undefined || groupIndex < previous) groupIndexByKey.set(key, groupIndex);
   }
 
-  for (const { url, title, visits, hostname, repoInfo, domainKey, key } of classified) {
+  // Contagens, títulos e agrupamentos consideram todo o histórico; a busca só decide o que aparece
+  const filtering = searchTerms.length > 0;
+
+  for (const { url, title, visits, searchText, hostname, repoInfo, domainKey, key } of classified) {
+    const matched = !filtering || matchesSearch(searchText);
+
     const groupIndex = groupIndexByKey.get(key);
     const urlGroup = groupIndex === undefined ? null : currentUrlGroups[groupIndex];
 
@@ -377,19 +413,22 @@ function categorizeHistory(entries) {
       // Nos agrupamentos do usuário, o caminho completo evita ambiguidade entre donos
       const name = urlGroup ? repoInfo.fullPath : repoInfo.repoName;
       aggregate = bucket.get(key) || newAggregate(name, repoInfo.repoUrl, false);
-      trackVisit(aggregate, stripRepoTitle(title, repoInfo.fullPath), visits, repoInfo.isRoot);
+      trackVisit(aggregate, stripRepoTitle(title, repoInfo.fullPath), visits, repoInfo.isRoot, matched);
     } else {
       // Demais domínios: agrupa por host + porta; o link usa a origem do acesso mais recente
       bucket = urlGroup ? userGroups.get(urlGroup.id) : domainCounts;
       aggregate = bucket.get(key) || newAggregate(domainKey, url.origin, true);
-      trackVisit(aggregate, title, visits, isRootUrl(url, 0));
+      trackVisit(aggregate, title, visits, isRootUrl(url, 0), matched);
     }
 
     bucket.set(key, aggregate);
   }
 
   for (const bucket of userGroups.values()) resolveBucket(bucket);
-  for (const bucket of projectGroups.values()) resolveBucket(bucket);
+  for (const [groupKey, bucket] of projectGroups) {
+    resolveBucket(bucket);
+    if (bucket.size === 0) projectGroups.delete(groupKey);
+  }
   resolveBucket(domainCounts);
 
   return { userGroups, projectGroups, domainCounts };
@@ -475,7 +514,13 @@ function updateUrlGroupsVisibility() {
 function renderUrlGroups(userGroups) {
   const container = document.getElementById('url-groups');
 
-  container.replaceChildren(...currentUrlGroups.map(group =>
+  // Durante a busca, agrupamentos sem resultado somem em vez de mostrar a mensagem de vazio
+  const groups = searchTerms.length > 0
+    ? currentUrlGroups.filter(group => userGroups.get(group.id).size > 0)
+    : currentUrlGroups;
+
+  document.getElementById('url-groups-section').hidden = groups.length === 0;
+  container.replaceChildren(...groups.map(group =>
     createGroupBlock(group.title, sortByCount(userGroups.get(group.id)), 'Nenhum acesso no último mês.')
   ));
 }
@@ -484,7 +529,9 @@ function renderCategorizedRepos(projectGroups) {
   const container = document.getElementById('git-repos');
 
   if (projectGroups.size === 0) {
-    renderMessage(container, 'Nenhum repositório acessado no último mês.');
+    renderMessage(container, searchTerms.length > 0
+      ? 'Nenhum repositório encontrado.'
+      : 'Nenhum repositório acessado no último mês.');
     return;
   }
 
@@ -508,7 +555,7 @@ function renderTopDomains(domainCounts) {
   const top = sortByCount(domainCounts).slice(0, 15);
 
   if (top.length === 0) {
-    renderMessage(container, 'Nenhum domínio registrado.');
+    renderMessage(container, searchTerms.length > 0 ? 'Nenhum domínio encontrado.' : 'Nenhum domínio registrado.');
     return;
   }
 
@@ -679,7 +726,36 @@ function setupUrlGroupsModal() {
   onEnter(patternInput, handleAdd);
 }
 
+// --- Busca ---
+
+function setupSearch() {
+  const input = document.getElementById('search-input');
+  let timer = null;
+
+  const apply = () => {
+    clearTimeout(timer);
+    const terms = parseSearchTerms(input.value);
+    if (terms.join(' ') === searchTerms.join(' ')) return;
+    searchTerms = terms;
+    renderDashboard();
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(apply, SEARCH_DEBOUNCE_MS);
+  });
+
+  // Esc limpa a busca na hora, sem esperar o debounce
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && input.value) {
+      input.value = '';
+      apply();
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  setupSearch();
   setupGitHostsModal();
   setupUrlGroupsModal();
   await Promise.all([loadGitHosts(), loadUrlGroups()]);
