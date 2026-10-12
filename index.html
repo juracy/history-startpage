@@ -155,10 +155,14 @@
       border: 1px solid transparent;
       transition: all 0.15s ease;
     }
-    .item-card:hover {
+    .item-card:hover, .item-card:focus-visible {
       background: var(--card-hover);
       border-color: var(--accent);
       transform: translateY(-1px);
+    }
+    .item-card:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
     }
     .item-main {
       display: flex;

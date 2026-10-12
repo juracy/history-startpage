@@ -532,6 +532,34 @@ function setupPeriodSelect() {
 
 // --- Busca ---
 
+// Na ordem do documento: agrupamentos, repositórios e domínios
+function getResultCards() {
+  return Array.from(document.querySelectorAll('.container .item-card'));
+}
+
+// ↑/↓ percorrem os cards; ↑ no primeiro volta para a busca. Enter e Ctrl+Enter num card
+// focado já são tratados pelo próprio link
+function setupResultsNavigation(input) {
+  document.querySelector('.container').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+
+    const card = e.target.closest('.item-card');
+    if (!card) return;
+
+    const cards = getResultCards();
+    const index = cards.indexOf(card);
+    e.preventDefault();
+    if (e.key === 'ArrowDown') {
+      cards[index + 1]?.focus();
+    } else if (index === 0) {
+      input.focus();
+    } else {
+      cards[index - 1].focus();
+    }
+  });
+}
+
 function setupSearch() {
   const input = document.getElementById('search-input');
   let timer = null;
@@ -549,13 +577,35 @@ function setupSearch() {
     timer = setTimeout(apply, SEARCH_DEBOUNCE_MS);
   });
 
-  // Esc limpa a busca na hora, sem esperar o debounce
+  // Esc limpa a busca na hora, sem esperar o debounce. Enter e ↓ também aplicam o que
+  // foi digitado antes de agir, para não abrir um resultado da busca anterior
   input.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;
+
     if (e.key === 'Escape' && input.value) {
       input.value = '';
       apply();
+    } else if (e.key === 'Enter') {
+      apply();
+      const first = getResultCards()[0];
+      if (!first) return;
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        // Página da extensão pode criar abas sem a permissão "tabs"
+        chrome.tabs.create({ url: first.href, active: false });
+      } else {
+        location.assign(first.href);
+      }
+    } else if (e.key === 'ArrowDown') {
+      apply();
+      const first = getResultCards()[0];
+      if (!first) return;
+      e.preventDefault();
+      first.focus();
     }
   });
+
+  setupResultsNavigation(input);
 
   // O Chrome dá o foco da nova aba à barra de endereço; quando a página o recebe pelo
   // teclado (F6/Shift+F6), ele vai para a busca. Foco vindo de clique é ignorado, para não

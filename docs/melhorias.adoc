@@ -10,7 +10,6 @@ toc::[]
 
 == Ordem recomendada
 
-. Navegação por teclado nos resultados e foco visível nos cards (<<teclado>>, <<a11y>>).
 . Editar e reordenar agrupamentos (<<agrupamentos>>).
 . Ocultar itens (<<ocultar>>).
 . "Ver mais" e resultados completos durante a busca (<<ver-mais>>).
@@ -69,19 +68,6 @@ Se o usuário remover `github.com` ou `gitlab.com`, hoje só consegue recolocá-
 
 == Usabilidade
 
-[[teclado]]
-=== Navegar e abrir resultados pelo teclado
-
-O painel já tem bons atalhos para chegar à busca (`Alt+T`, `/` e `Shift+F6`), mas depois de digitar ainda é preciso usar o mouse.
-
-Proposta:
-
-* `Enter` abre o primeiro resultado;
-* `↑`/`↓` percorrem os cards;
-* `Ctrl+Enter` abre em segundo plano.
-
-Isso completa o uso do painel como lançador.
-
 === Destacar os termos encontrados
 
 Realçar os termos da busca no nome e no título dos cards.
@@ -118,11 +104,6 @@ Falta um `@media` que passe para uma coluna.
 
 Sem o `theme.css` do matugen, o painel é sempre escuro.
 Falta tratar `prefers-color-scheme: light`.
-
-=== Foco visível nos cards
-
-`.item-card` só tem estilo de `:hover`.
-Um `:focus-visible` equivalente é necessário para a navegação por teclado proposta em <<teclado>>.
 
 === Rótulos para leitores de tela
 

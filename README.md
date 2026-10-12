@@ -18,6 +18,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 - **Busca Instantânea:**
   - Filtra repositórios, domínios e agrupamentos enquanto você digita, pela URL ou pelo título das páginas visitadas (sem diferenciar maiúsculas nem acentos; `Esc` limpa).
   - Como o Chrome dá o foco da nova aba à barra de endereço, use `Shift+F6` para ir à busca, `/` quando a página já tem o foco, ou `Alt+T` para abrir o painel com o cursor já na busca (o atalho pode ser trocado em `chrome://extensions/shortcuts`).
+  - Funciona como lançador: `Enter` abre o primeiro resultado, `Ctrl+Enter` o abre em segundo plano e `↑`/`↓` percorrem os cards.
 - **Favicons:**
   - Cada repositório, domínio e host Git mostra o ícone do site, lido do cache local de favicons do Chrome (permissão `favicon`), sem nenhuma requisição externa — funciona também com hosts internos. Sites sem ícone em cache aparecem com o globo padrão.
 - **Configuração Dinâmica in-browser:**
@@ -114,6 +115,9 @@ As cores do painel podem acompanhar o papel de parede via [matugen](https://gith
 | `Shift+F6` | Leva o foco da barra de endereço para a busca do painel (o `F6` também funciona, mas passa antes pela faixa de abas). |
 | `/` | Foca a busca de qualquer ponto da página. |
 | `Esc` | Limpa a busca. |
+| `Enter` (na busca) | Abre o primeiro resultado. |
+| `Ctrl+Enter` | Abre o primeiro resultado (ou o card focado) numa aba em segundo plano. |
+| `↑` / `↓` | Percorrem os cards a partir da busca; `↑` no primeiro card volta para a busca. |
 | `Alt+T` | Abre o painel numa nova aba com o cursor já na busca. |
 
 ### O `Alt+T` não funciona
