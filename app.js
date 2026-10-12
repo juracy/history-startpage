@@ -1,82 +1,15 @@
-const DAY_MS = 24 * 60 * 60 * 1000;
-const HISTORY_PERIODS = [
-  { id: '1d', label: '24 horas', phrase: 'nas últimas 24 horas', ms: DAY_MS },
-  { id: '7d', label: '1 semana', phrase: 'na última semana', ms: 7 * DAY_MS },
-  { id: '30d', label: '1 mês', phrase: 'no último mês', ms: 30 * DAY_MS },
-  { id: '90d', label: '3 meses', phrase: 'nos últimos 3 meses', ms: 90 * DAY_MS },
-  { id: '180d', label: '6 meses', phrase: 'nos últimos 6 meses', ms: 180 * DAY_MS },
-  { id: '365d', label: '1 ano', phrase: 'no último ano', ms: 365 * DAY_MS }
-];
-const DEFAULT_PERIOD_ID = '30d';
-const HISTORY_PAGE_SIZE = 5000;
-const VISITS_CONCURRENCY = 100;
-const DEFAULT_GIT_HOSTS = ['github.com', 'gitlab.com'];
+import { categorizeHistory } from './lib/categorize.js';
+import { DEFAULT_GIT_HOSTS, DEFAULT_PERIOD_ID, HISTORY_PERIODS, findPeriod } from './lib/constants.js';
+import { DEFAULT_FORGE, GIT_FORGES, findKnownForge, toGitHost } from './lib/forges.js';
+import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
+import {
+  createSaveQueue, readGitHosts, readHistoryPeriod, readUrlGroups,
+  writeGitHosts, writeHistoryPeriod, writeUrlGroups
+} from './lib/storage.js';
+import { normalizeHost, normalizePattern, parseSearchTerms } from './lib/text.js';
+
 const SEARCH_DEBOUNCE_MS = 200;
 const PERIOD_DEBOUNCE_MS = 400;
-
-const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
-
-const EXCLUDED_HOSTS = new Set([
-  'localhost', '127.0.0.1'
-]);
-
-// No GitLab os grupos têm subgrupos, então o repositório termina na primeira rota interna.
-// As rotas novas ficam sob "/-/"; as demais são as antigas, que ainda aparecem no histórico
-// e que o GitLab reserva, para que não sejam nomes de subgrupo
-const GITLAB_STOP_KEYWORDS = new Set([
-  '-', 'tree', 'blob', 'raw', 'blame', 'edit', 'commits', 'commit', 'branches', 'tags',
-  'compare', 'merge_requests', 'issues', 'pipelines', 'jobs', 'builds', 'wikis', 'files',
-  'find_file', 'refs', 'badges', 'preview', 'create', 'update', 'new'
-]);
-
-// Regras de cada forja. reservedRoots são primeiros segmentos que são páginas do próprio host
-// (configurações, painéis, cadastro), e não donos de repositório
-const GIT_FORGES = {
-  gitlab: {
-    label: 'GitLab',
-    reservedRoots: new Set([
-      '-', 'admin', 'api', 'dashboard', 'explore', 'groups', 'help', 'import', 'oauth',
-      'profile', 'projects', 'search', 'snippets', 'uploads', 'users'
-    ]),
-    parse: parseGitLabPath
-  },
-  github: {
-    label: 'GitHub',
-    reservedRoots: new Set([
-      'settings', 'orgs', 'organizations', 'users', 'account', 'dashboard', 'explore',
-      'marketplace', 'notifications', 'new', 'login', 'logout', 'signup', 'join', 'sessions',
-      'search', 'topics', 'trending', 'collections', 'codespaces', 'sponsors', 'apps',
-      'enterprises', 'features', 'issues', 'pulls', 'stars', 'watching', 'events', 'about',
-      'pricing', 'security', 'advisories', 'copilot', 'site', 'contact', 'readme'
-    ]),
-    parse: parseOwnerRepoPath
-  },
-  gitea: {
-    label: 'Gitea / Forgejo',
-    reservedRoots: new Set([
-      '-', 'admin', 'api', 'assets', 'attachments', 'avatars', 'captcha', 'commits', 'explore',
-      'issues', 'login', 'milestones', 'new', 'notifications', 'org', 'pulls', 'repo', 'search',
-      'user', 'v2'
-    ]),
-    parse: parseOwnerRepoPath
-  },
-  bitbucket: {
-    label: 'Bitbucket',
-    reservedRoots: new Set(['account', 'dashboard', 'repo', 'snippets', 'site', 'product', 'socialauth']),
-    parse: parseBitbucketPath
-  },
-  azure: {
-    label: 'Azure DevOps',
-    reservedRoots: new Set(),
-    parse: parseAzurePath
-  }
-};
-const DEFAULT_FORGE = 'gitlab';
-
-const KNOWN_FORGE_HOSTS = new Map([
-  ['github.com', 'github'], ['gitlab.com', 'gitlab'], ['bitbucket.org', 'bitbucket'],
-  ['dev.azure.com', 'azure'], ['gitea.com', 'gitea'], ['codeberg.org', 'gitea']
-]);
 
 // Hosts Git monitorados: [{ host, forge }]
 let currentGitHosts = DEFAULT_GIT_HOSTS.map(host => toGitHost(host));
@@ -98,124 +31,12 @@ let hostIconPages = new Map();
 // Termos da busca já normalizados; vazio = sem filtro
 let searchTerms = [];
 
-// --- Utilitários ---
-
-function findPeriod(id) {
-  return HISTORY_PERIODS.find(p => p.id === id) || null;
-}
-
-function normalizeHost(value) {
-  const raw = String(value ?? '').trim().toLowerCase();
-  if (!raw) return null;
-
-  try {
-    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//.test(raw) ? raw : `https://${raw}`);
-    return url.hostname.replace(/^www\./, '') || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function safeDecode(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch (e) {
-    return value;
-  }
-}
-
-// Raiz = caminho com exatamente rootSegmentCount segmentos; a query é ignorada,
-// mas rotas de SPA no hash (#/... ou #!/...) contam como página interna
-function isRootUrl(url, rootSegmentCount, segmentCount = url.pathname.split('/').filter(Boolean).length) {
-  return segmentCount === rootSegmentCount && !/^#!?\//.test(url.hash);
-}
-
-function findKnownForge(host) {
-  if (KNOWN_FORGE_HOSTS.has(host)) return KNOWN_FORGE_HOSTS.get(host);
-  return host.endsWith('.visualstudio.com') ? 'azure' : null;
-}
-
-function isValidForge(forge) {
-  return typeof forge === 'string' && Object.hasOwn(GIT_FORGES, forge);
-}
-
-// Hosts próprios sem tipo escolhido são tratados como GitLab, o caso mais comum de instância interna
-function toGitHost(host, forge) {
-  return { host, forge: isValidForge(forge) ? forge : findKnownForge(host) || DEFAULT_FORGE };
-}
-
-// Remove contadores de notificação do início, como "(17) Inbox"
-function cleanTitle(title) {
-  return (title || '').trim().replace(/^\(\d+\+?\)\s*/, '');
-}
-
-// Remove do título o que o card já mostra: "GitHub - ", "owner/repo: " e " · GitLab"
-function stripRepoTitle(title, fullPath) {
-  let result = title.replace(/^GitHub - /, '').replace(/\s*·\s*GitLab$/, '');
-  const normalized = result.replace(/\s*\/\s*/g, '/');
-  if (normalized.toLowerCase().startsWith(fullPath.toLowerCase())) {
-    result = normalized.slice(fullPath.length).replace(/^[\s:·|–-]+/, '');
-  }
-  return result.trim();
-}
-
-// Minúsculas e sem acentos, para que "configuracao" encontre "Configuração"
-function normalizeSearchText(value) {
-  return String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-}
-
-function parseSearchTerms(value) {
-  return normalizeSearchText(value).split(/\s+/).filter(Boolean);
-}
-
-// Todos os termos precisam aparecer na URL ou no título (em qualquer ordem)
-function matchesSearch(searchText) {
-  return searchTerms.every(term => searchText.includes(term));
-}
-
-function normalizePattern(value) {
-  return String(value ?? '').trim().toLowerCase();
-}
-
-function parseWebUrl(rawUrl) {
-  if (!rawUrl) return null;
-
-  try {
-    const url = new URL(rawUrl);
-    if (!ALLOWED_PROTOCOLS.has(url.protocol)) return null;
-
-    const host = url.hostname.replace(/^www\./, '');
-    if (!host || EXCLUDED_HOSTS.has(host)) return null;
-
-    return url;
-  } catch (e) {
-    return null;
-  }
-}
-
 // --- Gerenciamento de Configurações (Storage) ---
 
-// Serializa as gravações: cada uma calcula a nova lista a partir do que a anterior salvou,
-// evitando que cliques rápidos sobrescrevam uns aos outros
-let saveQueue = Promise.resolve();
-
-function enqueueSave(task) {
-  const run = saveQueue.then(task);
-  saveQueue = run.catch(() => {});
-  return run;
-}
+const enqueueSave = createSaveQueue();
 
 async function loadGitHosts() {
-  try {
-    const data = await chrome.storage.sync.get({ gitHosts: DEFAULT_GIT_HOSTS, gitHostForges: {} });
-    const stored = Array.isArray(data.gitHosts) ? data.gitHosts : DEFAULT_GIT_HOSTS;
-    const forges = data.gitHostForges && typeof data.gitHostForges === 'object' ? data.gitHostForges : {};
-    const hosts = [...new Set(stored.map(normalizeHost).filter(Boolean))];
-    currentGitHosts = hosts.map(host => toGitHost(host, Object.hasOwn(forges, host) ? forges[host] : null));
-  } catch (e) {
-    console.error('Falha ao carregar hosts Git:', e);
-    currentGitHosts = DEFAULT_GIT_HOSTS.map(host => toGitHost(host));
-  }
+  currentGitHosts = await readGitHosts();
   return currentGitHosts;
 }
 
@@ -225,11 +46,7 @@ function saveGitHosts(update) {
     if (hosts === currentGitHosts) return true;
 
     try {
-      // O tipo fica numa chave separada para que versões anteriores continuem lendo gitHosts como lista de hosts
-      await chrome.storage.sync.set({
-        gitHosts: hosts.map(h => h.host),
-        gitHostForges: Object.fromEntries(hosts.map(h => [h.host, h.forge]))
-      });
+      await writeGitHosts(hosts);
     } catch (e) {
       console.error('Falha ao salvar hosts Git:', e);
       showDialogError('settings-error', `Não foi possível salvar: ${e.message}`);
@@ -245,32 +62,7 @@ function saveGitHosts(update) {
 }
 
 async function loadUrlGroups() {
-  try {
-    const data = await chrome.storage.sync.get({ urlGroups: [] });
-    const stored = Array.isArray(data.urlGroups) ? data.urlGroups : [];
-    const seenIds = new Set();
-    const seenPatterns = new Set();
-
-    currentUrlGroups = [];
-    for (const g of stored) {
-      if (!g || typeof g.title !== 'string' || typeof g.pattern !== 'string') continue;
-
-      const title = g.title.trim();
-      const pattern = normalizePattern(g.pattern);
-      if (!title || !pattern || seenPatterns.has(pattern)) continue;
-
-      // IDs repetidos (edição manual ou merge entre dispositivos) ganham um novo
-      let id = String(g.id || '');
-      if (!id || seenIds.has(id)) id = crypto.randomUUID();
-
-      seenIds.add(id);
-      seenPatterns.add(pattern);
-      currentUrlGroups.push({ id, title, pattern });
-    }
-  } catch (e) {
-    console.error('Falha ao carregar agrupamentos:', e);
-    currentUrlGroups = [];
-  }
+  currentUrlGroups = await readUrlGroups();
   return currentUrlGroups;
 }
 
@@ -280,7 +72,7 @@ function saveUrlGroups(update) {
     if (groups === currentUrlGroups) return true;
 
     try {
-      await chrome.storage.sync.set({ urlGroups: groups });
+      await writeUrlGroups(groups);
     } catch (e) {
       console.error('Falha ao salvar agrupamentos:', e);
       showDialogError('groups-error', `Não foi possível salvar: ${e.message}`);
@@ -296,13 +88,7 @@ function saveUrlGroups(update) {
 }
 
 async function loadHistoryPeriod() {
-  try {
-    const data = await chrome.storage.sync.get({ historyPeriod: DEFAULT_PERIOD_ID });
-    currentPeriod = findPeriod(data.historyPeriod) || findPeriod(DEFAULT_PERIOD_ID);
-  } catch (e) {
-    console.error('Falha ao carregar o período:', e);
-    currentPeriod = findPeriod(DEFAULT_PERIOD_ID);
-  }
+  currentPeriod = await readHistoryPeriod();
   return currentPeriod;
 }
 
@@ -310,163 +96,14 @@ async function loadHistoryPeriod() {
 function saveHistoryPeriod(id) {
   return enqueueSave(async () => {
     try {
-      await chrome.storage.sync.set({ historyPeriod: id });
+      await writeHistoryPeriod(id);
     } catch (e) {
       console.error('Falha ao salvar o período:', e);
     }
   });
 }
 
-function parseGitRepository(url, forge) {
-  const rules = GIT_FORGES[forge];
-  const segments = url.pathname.split('/').filter(Boolean);
-  // Páginas do próprio host contam para o domínio, como as URLs de um único segmento
-  if (segments.length < 2 || rules.reservedRoots.has(segments[0])) return null;
-
-  const repo = rules.parse(segments);
-  if (!repo) return null;
-
-  const { groupSegments, repoName, rootSegmentCount } = repo;
-  const fullRepoPath = [...groupSegments, repoName].join('/');
-  const rootPath = segments.slice(0, rootSegmentCount).join('/');
-
-  return {
-    fullPath: safeDecode(fullRepoPath),
-    projectGroup: safeDecode(groupSegments.join('/')),
-    repoName: safeDecode(repoName),
-    repoUrl: `${url.origin}/${rootPath}`,
-    uniqueKey: `${url.host}/${rootPath}`,
-    isRoot: isRootUrl(url, rootSegmentCount, segments.length)
-  };
-}
-
-// GitHub, Gitea/Forgejo e Bitbucket Cloud: sempre /dono/repositório, sem subgrupos
-function parseOwnerRepoPath(segments) {
-  return { groupSegments: [segments[0]], repoName: segments[1], rootSegmentCount: 2 };
-}
-
-function parseGitLabPath(segments) {
-  // Os dois primeiros segmentos (grupo/repositório) nunca são tratados como palavras de parada
-  const cleanSegments = segments.slice(0, 2);
-  for (const seg of segments.slice(2)) {
-    if (GITLAB_STOP_KEYWORDS.has(seg)) break;
-    cleanSegments.push(seg);
-  }
-  return {
-    groupSegments: cleanSegments.slice(0, -1),
-    repoName: cleanSegments[cleanSegments.length - 1],
-    rootSegmentCount: cleanSegments.length
-  };
-}
-
-// Bitbucket Server/Data Center usa /projects/CHAVE/repos/repo e /users/nome/repos/repo
-function parseBitbucketPath(segments) {
-  if (segments[0] !== 'projects' && segments[0] !== 'users') return parseOwnerRepoPath(segments);
-  if (segments[2] !== 'repos' || !segments[3]) return null;
-  return { groupSegments: [segments[1]], repoName: segments[3], rootSegmentCount: 4 };
-}
-
-// Azure DevOps: /org/projeto/_git/repo (ou /org/_git/repo). O "_git" fica na URL, mas não no nome
-// mostrado; as demais páginas (_boards, _build…) e a home do projeto são do projeto, não de um repositório
-function parseAzurePath(segments) {
-  const gitIndex = segments.indexOf('_git');
-  if (gitIndex < 1 || !segments[gitIndex + 1]) return null;
-  return { groupSegments: segments.slice(0, gitIndex), repoName: segments[gitIndex + 1], rootSegmentCount: gitIndex + 2 };
-}
-
 // --- Carregamento do Histórico ---
-
-// isCurrent() falso = carregamento substituído por outro; a função para e devolve null
-async function fetchHistoryItems(startTime, isCurrent) {
-  const seen = new Map();
-  let endTime = Date.now();
-
-  // Pagina pelo histórico usando endTime, já que history.search limita a quantidade de resultados
-  while (true) {
-    const page = await chrome.history.search({
-      text: '',
-      startTime,
-      endTime,
-      maxResults: HISTORY_PAGE_SIZE
-    });
-    if (!isCurrent()) return null;
-
-    let added = 0;
-    let oldest = endTime;
-    for (const item of page) {
-      if (!seen.has(item.id)) {
-        seen.set(item.id, item);
-        added++;
-      }
-      if (item.lastVisitTime < oldest) oldest = item.lastVisitTime;
-    }
-
-    if (page.length < HISTORY_PAGE_SIZE) break;
-    endTime = added > 0 ? oldest + 1 : oldest;
-  }
-
-  return [...seen.values()];
-}
-
-async function countRecentVisits(rawUrl, startTime) {
-  const visits = await chrome.history.getVisits({ url: rawUrl });
-  return visits.filter(v => v.visitTime >= startTime).length;
-}
-
-async function buildHistoryEntries(periodMs, isCurrent) {
-  const startTime = Date.now() - periodMs;
-  const items = await fetchHistoryItems(startTime, isCurrent);
-  if (!items) return null;
-
-  const candidates = [];
-  for (const item of items) {
-    const url = parseWebUrl(item.url);
-    if (url) {
-      candidates.push({
-        url,
-        rawUrl: item.url,
-        title: cleanTitle(item.title),
-        lastVisitTime: item.lastVisitTime
-      });
-    }
-  }
-
-  // visitCount do history.search é o total histórico; conta apenas as visitas dentro da janela
-  const entries = [];
-  for (let i = 0; i < candidates.length; i += VISITS_CONCURRENCY) {
-    const batch = candidates.slice(i, i + VISITS_CONCURRENCY);
-    const counts = await Promise.all(batch.map(c => countRecentVisits(c.rawUrl, startTime)));
-    if (!isCurrent()) return null;
-    batch.forEach((c, j) => {
-      if (counts[j] > 0) {
-        entries.push({
-          url: c.url,
-          // O cache de favicons do Chrome é indexado pela URL como está no histórico
-          rawUrl: c.rawUrl,
-          title: c.title,
-          lastVisitTime: c.lastVisitTime,
-          visits: counts[j],
-          // Como nos agrupamentos, só host + caminho: query e hash (redirects, buscas) não contam
-          searchText: normalizeSearchText(`${safeDecode(c.url.host + c.url.pathname)}\n${c.title}`)
-        });
-      }
-    });
-  }
-
-  entries.sort((a, b) => b.lastVisitTime - a.lastVisitTime);
-  return entries;
-}
-
-// O ícone do site sai da raiz do host: páginas internas podem trocar o favicon
-// (status de pipeline, contador de não lidas). Entre várias raízes, vale a mais recente
-function buildHostIconPages(entries) {
-  const pages = new Map();
-  for (const { url, rawUrl } of entries) {
-    const host = url.host.replace(/^www\./, '');
-    if (!pages.has(host) && isRootUrl(url, 0)) pages.set(host, rawUrl);
-  }
-  return pages;
-}
 
 // Invalida o carregamento em andamento e mostra o estado de carregamento.
 // Sem cache nesse intervalo, para que busca ou configurações não redesenhem dados de outro período
@@ -501,136 +138,19 @@ async function loadHistory() {
   renderDashboard();
 }
 
-// --- Processamento do Histórico ---
-
-// Acumula visitas e candidatos a título e a página do ícone; resolveAggregate reduz a
-// { name, url, count, title, iconPageUrl }. matched indica se alguma URL do item casou com a busca
-function newAggregate(name, url, allowFallback, hostIconPage) {
-  return {
-    name, url, count: 0, allowFallback, hostIconPage, rootTitle: '', topTitle: '', topTitleVisits: 0,
-    rootPageUrl: '', topPageUrl: '', topPageVisits: 0, matched: false
-  };
-}
-
-function trackVisit(target, pageUrl, title, visits, isRoot, matched) {
-  target.count += visits;
-  if (matched) target.matched = true;
-  if (isRoot && !target.rootPageUrl) target.rootPageUrl = pageUrl;
-  if (visits > target.topPageVisits) {
-    target.topPageUrl = pageUrl;
-    target.topPageVisits = visits;
-  }
-  if (!title) return;
-  if (isRoot && !target.rootTitle) target.rootTitle = title;
-  if (visits > target.topTitleVisits) {
-    target.topTitle = title;
-    target.topTitleVisits = visits;
-  }
-}
-
-// Repositórios usam só o título da raiz; domínios caem para o da página mais visitada.
-// O ícone segue a mesma regra, mas prefere a raiz do host: num repositório, as páginas de
-// PR, MR e pipeline trocam o favicon pelo status do CI. Sem nenhuma raiz visitada, o
-// Chrome procura um ícone qualquer do host a partir da URL do próprio item
-function resolveAggregate({ name, url, count, allowFallback, hostIconPage, rootTitle, topTitle, rootPageUrl, topPageUrl }) {
-  const title = rootTitle || (allowFallback ? topTitle : '');
-  const iconPageUrl = hostIconPage || rootPageUrl || (allowFallback ? topPageUrl : '') || url;
-  return { name, url, count, title: title === name ? '' : title, iconPageUrl };
-}
-
-// Com busca ativa, descarta os itens sem nenhuma URL encontrada
-function resolveBucket(bucket) {
-  for (const [key, aggregate] of bucket) {
-    if (aggregate.matched) bucket.set(key, resolveAggregate(aggregate));
-    else bucket.delete(key);
-  }
-}
-
-// Casa o trecho só com host + caminho, para que query e hash (buscas, redirects) não contem
-function findUrlGroupIndex(url) {
-  if (currentUrlGroups.length === 0) return -1;
-  const haystack = safeDecode(url.host + url.pathname).toLowerCase();
-  return currentUrlGroups.findIndex(g => haystack.includes(g.pattern));
-}
-
-function categorizeHistory(entries) {
-  const gitForges = new Map(currentGitHosts.map(h => [h.host, h.forge]));
-  const userGroups = new Map(currentUrlGroups.map(g => [g.id, new Map()]));
-  const projectGroups = new Map();
-  const domainCounts = new Map();
-
-  const classified = entries.map(entry => {
-    const hostname = entry.url.hostname.replace(/^www\./, '');
-    const forge = gitForges.get(hostname);
-    const repoInfo = forge ? parseGitRepository(entry.url, forge) : null;
-    const domainKey = entry.url.host.replace(/^www\./, '');
-    const key = repoInfo ? `repo:${repoInfo.uniqueKey}` : `domain:${domainKey}`;
-    return { ...entry, hostname, repoInfo, domainKey, key, groupIndex: findUrlGroupIndex(entry.url) };
-  });
-
-  // O agrupamento é decidido por repositório/domínio, não por URL: se qualquer URL casar,
-  // o item inteiro vai para o agrupamento (o de menor posição na lista, se houver vários)
-  const groupIndexByKey = new Map();
-  for (const { key, groupIndex } of classified) {
-    if (groupIndex < 0) continue;
-    const previous = groupIndexByKey.get(key);
-    if (previous === undefined || groupIndex < previous) groupIndexByKey.set(key, groupIndex);
-  }
-
-  // Contagens, títulos e agrupamentos consideram todo o histórico; a busca só decide o que aparece
-  const filtering = searchTerms.length > 0;
-
-  for (const { url, rawUrl, title, visits, searchText, hostname, repoInfo, domainKey, key } of classified) {
-    const matched = !filtering || matchesSearch(searchText);
-
-    const groupIndex = groupIndexByKey.get(key);
-    const urlGroup = groupIndex === undefined ? null : currentUrlGroups[groupIndex];
-
-    let bucket, aggregate;
-
-    if (repoInfo) {
-      if (urlGroup) {
-        bucket = userGroups.get(urlGroup.id);
-      } else {
-        const groupKey = `${hostname} › ${repoInfo.projectGroup}`;
-        if (!projectGroups.has(groupKey)) projectGroups.set(groupKey, new Map());
-        bucket = projectGroups.get(groupKey);
-      }
-      // Nos agrupamentos do usuário, o caminho completo evita ambiguidade entre donos
-      const name = urlGroup ? repoInfo.fullPath : repoInfo.repoName;
-      aggregate = bucket.get(key) || newAggregate(name, repoInfo.repoUrl, false, hostIconPages.get(domainKey));
-      trackVisit(aggregate, rawUrl, stripRepoTitle(title, repoInfo.fullPath), visits, repoInfo.isRoot, matched);
-    } else {
-      // Demais domínios: agrupa por host + porta; o link usa a origem do acesso mais recente
-      bucket = urlGroup ? userGroups.get(urlGroup.id) : domainCounts;
-      aggregate = bucket.get(key) || newAggregate(domainKey, url.origin, true, hostIconPages.get(domainKey));
-      trackVisit(aggregate, rawUrl, title, visits, isRootUrl(url, 0), matched);
-    }
-
-    bucket.set(key, aggregate);
-  }
-
-  for (const bucket of userGroups.values()) resolveBucket(bucket);
-  for (const [groupKey, bucket] of projectGroups) {
-    resolveBucket(bucket);
-    if (bucket.size === 0) projectGroups.delete(groupKey);
-  }
-  resolveBucket(domainCounts);
-
-  return { userGroups, projectGroups, domainCounts };
-}
+// --- Renderização na Interface ---
 
 function renderDashboard() {
   updateUrlGroupsVisibility();
   if (!historyEntries) return;
 
-  const { userGroups, projectGroups, domainCounts } = categorizeHistory(historyEntries);
+  const { userGroups, projectGroups, domainCounts } = categorizeHistory(historyEntries, {
+    gitHosts: currentGitHosts, urlGroups: currentUrlGroups, searchTerms, hostIconPages
+  });
   renderUrlGroups(userGroups);
   renderCategorizedRepos(projectGroups);
   renderTopDomains(domainCounts);
 }
-
-// --- Renderização na Interface ---
 
 function renderMessage(container, text) {
   const div = document.createElement('div');
