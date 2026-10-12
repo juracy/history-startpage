@@ -233,7 +233,10 @@
     }
     .input-row input {
       flex: 1;
+    }
+    .input-row input, .input-row select {
       min-width: 0;
+      font-family: inherit;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -241,8 +244,16 @@
       color: var(--text);
       outline: none;
     }
-    .input-row input:focus {
+    .input-row input:focus, .input-row select:focus {
       border-color: var(--accent);
+    }
+    .input-row select option {
+      background: var(--card-bg);
+      color: var(--text);
+    }
+    .tag-forge {
+      font-size: 0.75rem;
+      color: var(--text-muted);
     }
     .tag-list {
       display: flex;
@@ -343,10 +354,12 @@
     <h2>Domínios Git Monitorados</h2>
     <p class="modal-help">
       Adicione hosts públicos ou internos (ex: <code>gitlab.corp.local</code>, <code>git.interno.com</code>).
+      O tipo define como o endereço é lido; para trocar o tipo de um host, adicione-o de novo.
     </p>
 
     <div class="input-row">
       <input type="text" id="domain-input" placeholder="ex: gitlab.empresa.com" autocomplete="off" />
+      <select id="forge-select" aria-label="Tipo de forja"></select>
       <button id="add-domain-btn" class="btn btn-primary">Adicionar</button>
     </div>
     <p id="settings-error" class="error-msg" hidden></p>

@@ -10,51 +10,10 @@ toc::[]
 
 == Ordem recomendada
 
-. Corrigir a classificação de repositórios Git (<<git>>): é correção de dados e tem custo baixo.
 . Navegação por teclado nos resultados e foco visível nos cards (<<teclado>>, <<a11y>>).
 . Editar e reordenar agrupamentos (<<agrupamentos>>).
 . Ocultar itens (<<ocultar>>).
 . "Ver mais" e resultados completos durante a busca (<<ver-mais>>).
-
-[[git]]
-== Problemas na classificação de repositórios Git
-
-=== Gitea, Forgejo, Bitbucket e Azure DevOps
-
-O README declara suporte a Gitea e Forgejo, mas esses hosts usam `/owner/repo/src/branch/main/...`, e `src` não está em `GIT_STOP_KEYWORDS` (`app.js`).
-
-.Exemplo
-`gitea.com/owner/repo/src/branch/main/README.md` vira o "repositório" `README.md` dentro do grupo `owner/repo/src/branch/main`.
-
-Faltam, entre outras, as palavras de parada:
-
-* `src`: Gitea, Forgejo e Bitbucket;
-* `pull-requests`: Bitbucket;
-* `_git`: Azure DevOps (`dev.azure.com/org/projeto/_git/repo`), que também precisaria de tratamento próprio da estrutura do caminho.
-
-=== Páginas do próprio host tratadas como repositório
-
-Como os dois primeiros segmentos do caminho nunca são cortados (`parseGitRepository`), páginas de navegação do host viram repositórios falsos:
-
-[cols="2,3"]
-|===
-|URL |Resultado atual
-
-|`github.com/settings/profile`
-|repositório `profile` no grupo `settings`
-
-|`github.com/orgs/acme/repositories`
-|repositório `repositories` no grupo `orgs/acme`
-
-|`gitlab.com/dashboard/merge_requests`
-|repositório `merge_requests` no grupo `dashboard`
-
-|`gitlab.com/-/user_settings/profile`
-|repositório `profile` no grupo `-/user_settings`
-|===
-
-Uma lista de primeiros segmentos reservados resolveria: `settings`, `orgs`, `users`, `dashboard`, `explore`, `-`, `groups`, `marketplace`, `notifications`, `new` e `login`.
-URLs com esses prefixos passariam a contar para o domínio do host, como já acontece com URLs de um único segmento.
 
 == Funcionalidades
 

@@ -25,7 +25,7 @@ Extensão Chrome Manifest V3 que substitui a New Tab Page por um painel com os r
 1. **Carregamento** (`loadHistory` → `buildHistoryEntries`): pagina `chrome.history.search` por `endTime` (o limite é `HISTORY_PAGE_SIZE`) e, como `visitCount` é o total histórico, conta as visitas dentro da janela com `chrome.history.getVisits`, em lotes de `VISITS_CONCURRENCY`. O resultado vai para o cache `historyEntries` (mais recente primeiro), junto com `hostIconPages`.
 2. **Cancelamento**: `historyLoadId` é incrementado em `startHistoryLoading`; cada carregamento recebe `isCurrent()` e descarta o resultado se outro começou depois (troca de período). Enquanto carrega, `historyEntries` fica `null` para que busca/configurações não redesenhem dados do período anterior.
 3. **Categorização** (`categorizeHistory`), refeita a cada `renderDashboard()` a partir do cache, sem reler o histórico:
-   - Hosts em `currentGitHosts` passam por `parseGitRepository`, que corta o caminho na primeira palavra de `GIT_STOP_KEYWORDS` (os dois primeiros segmentos nunca são cortados) e agrupa por `host › grupo/subgrupo`.
+   - `currentGitHosts` é uma lista de `{ host, forge }`, e cada forja de `GIT_FORGES` tem seus `reservedRoots` (primeiros segmentos que são páginas do próprio host e contam para o domínio) e seu `parse`. GitHub, Gitea/Forgejo e Bitbucket Cloud usam sempre `dono/repo`; o GitLab aceita subgrupos e corta o caminho na primeira palavra de `GITLAB_STOP_KEYWORDS` (os dois primeiros segmentos nunca são cortados); o Bitbucket Server usa `/projects/CHAVE/repos/repo`; no Azure DevOps o repositório é o segmento seguinte a `_git`, e as demais páginas contam para o domínio. O resultado agrupa por `host › grupo/subgrupo`. Hosts sem tipo escolhido são detectados por `findKnownForge` ou caem em `DEFAULT_FORGE` (GitLab).
    - Demais URLs agregam por `host` (com porta, sem `www.`).
    - Agrupamentos do usuário (`currentUrlGroups`) casam o padrão por substring em host + caminho (sem query/hash). A decisão é por repositório/domínio inteiro: se qualquer URL casar, o item vai para o agrupamento de menor índice.
    - A busca não altera contagens nem títulos: só marca `matched` e `resolveBucket` descarta itens sem nenhuma URL encontrada.
@@ -34,7 +34,7 @@ Extensão Chrome Manifest V3 que substitui a New Tab Page por um painel com os r
 
 ### Persistência
 
-`chrome.storage.sync` com as chaves `gitHosts`, `urlGroups` e `historyPeriod`. As gravações passam por `enqueueSave`, que serializa as operações; `saveGitHosts`/`saveUrlGroups` recebem uma função `update(atual) → nova lista` (retornar a mesma referência significa "nada a salvar") e, ao salvar, atualizam o estado e redesenham. Os loaders normalizam e deduplicam o que vem do storage, pois ele pode ter sido editado à mão ou mesclado entre dispositivos.
+`chrome.storage.sync` com as chaves `gitHosts` (lista de hosts), `gitHostForges` (host → tipo de forja, separado para que versões anteriores continuem lendo `gitHosts`), `urlGroups` e `historyPeriod`. As gravações passam por `enqueueSave`, que serializa as operações; `saveGitHosts`/`saveUrlGroups` recebem uma função `update(atual) → nova lista` (retornar a mesma referência significa "nada a salvar") e, ao salvar, atualizam o estado e redesenham. Os loaders normalizam e deduplicam o que vem do storage, pois ele pode ter sido editado à mão ou mesclado entre dispositivos.
 
 ### Foco na busca
 

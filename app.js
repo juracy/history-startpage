@@ -20,19 +20,66 @@ const EXCLUDED_HOSTS = new Set([
   'localhost', '127.0.0.1'
 ]);
 
-const GIT_STOP_KEYWORDS = new Set([
-  '-', 'tree', 'blob', 'raw', 'blame', 'edit', 'commits', 'commit',
-  'branches', 'pull', 'pulls', 'merge_requests', 'issues', 'pipelines',
-  'jobs', 'activity', 'settings', 'releases', 'tags', 'compare', 'actions',
-  'wiki', 'wikis', 'discussions', 'security', 'projects', 'network',
-  'graphs', 'pulse', 'milestones', 'labels', 'packages', 'deployments',
-  'environments', 'forks', 'stargazers', 'watchers', 'find', 'search',
-  'agents', 'custom-properties', 'insights', 'models', 'codespaces',
-  'attestations', 'rules', 'contributors', 'community', 'sponsors',
-  'archive', 'subscription'
+// No GitLab os grupos têm subgrupos, então o repositório termina na primeira rota interna.
+// As rotas novas ficam sob "/-/"; as demais são as antigas, que ainda aparecem no histórico
+// e que o GitLab reserva, para que não sejam nomes de subgrupo
+const GITLAB_STOP_KEYWORDS = new Set([
+  '-', 'tree', 'blob', 'raw', 'blame', 'edit', 'commits', 'commit', 'branches', 'tags',
+  'compare', 'merge_requests', 'issues', 'pipelines', 'jobs', 'builds', 'wikis', 'files',
+  'find_file', 'refs', 'badges', 'preview', 'create', 'update', 'new'
 ]);
 
-let currentGitHosts = [...DEFAULT_GIT_HOSTS];
+// Regras de cada forja. reservedRoots são primeiros segmentos que são páginas do próprio host
+// (configurações, painéis, cadastro), e não donos de repositório
+const GIT_FORGES = {
+  gitlab: {
+    label: 'GitLab',
+    reservedRoots: new Set([
+      '-', 'admin', 'api', 'dashboard', 'explore', 'groups', 'help', 'import', 'oauth',
+      'profile', 'projects', 'search', 'snippets', 'uploads', 'users'
+    ]),
+    parse: parseGitLabPath
+  },
+  github: {
+    label: 'GitHub',
+    reservedRoots: new Set([
+      'settings', 'orgs', 'organizations', 'users', 'account', 'dashboard', 'explore',
+      'marketplace', 'notifications', 'new', 'login', 'logout', 'signup', 'join', 'sessions',
+      'search', 'topics', 'trending', 'collections', 'codespaces', 'sponsors', 'apps',
+      'enterprises', 'features', 'issues', 'pulls', 'stars', 'watching', 'events', 'about',
+      'pricing', 'security', 'advisories', 'copilot', 'site', 'contact', 'readme'
+    ]),
+    parse: parseOwnerRepoPath
+  },
+  gitea: {
+    label: 'Gitea / Forgejo',
+    reservedRoots: new Set([
+      '-', 'admin', 'api', 'assets', 'attachments', 'avatars', 'captcha', 'commits', 'explore',
+      'issues', 'login', 'milestones', 'new', 'notifications', 'org', 'pulls', 'repo', 'search',
+      'user', 'v2'
+    ]),
+    parse: parseOwnerRepoPath
+  },
+  bitbucket: {
+    label: 'Bitbucket',
+    reservedRoots: new Set(['account', 'dashboard', 'repo', 'snippets', 'site', 'product', 'socialauth']),
+    parse: parseBitbucketPath
+  },
+  azure: {
+    label: 'Azure DevOps',
+    reservedRoots: new Set(),
+    parse: parseAzurePath
+  }
+};
+const DEFAULT_FORGE = 'gitlab';
+
+const KNOWN_FORGE_HOSTS = new Map([
+  ['github.com', 'github'], ['gitlab.com', 'gitlab'], ['bitbucket.org', 'bitbucket'],
+  ['dev.azure.com', 'azure'], ['gitea.com', 'gitea'], ['codeberg.org', 'gitea']
+]);
+
+// Hosts Git monitorados: [{ host, forge }]
+let currentGitHosts = DEFAULT_GIT_HOSTS.map(host => toGitHost(host));
 
 let currentPeriod = findPeriod(DEFAULT_PERIOD_ID);
 
@@ -79,9 +126,22 @@ function safeDecode(value) {
 
 // Raiz = caminho com exatamente rootSegmentCount segmentos; a query é ignorada,
 // mas rotas de SPA no hash (#/... ou #!/...) contam como página interna
-function isRootUrl(url, rootSegmentCount) {
-  const segmentCount = url.pathname.split('/').filter(Boolean).length;
+function isRootUrl(url, rootSegmentCount, segmentCount = url.pathname.split('/').filter(Boolean).length) {
   return segmentCount === rootSegmentCount && !/^#!?\//.test(url.hash);
+}
+
+function findKnownForge(host) {
+  if (KNOWN_FORGE_HOSTS.has(host)) return KNOWN_FORGE_HOSTS.get(host);
+  return host.endsWith('.visualstudio.com') ? 'azure' : null;
+}
+
+function isValidForge(forge) {
+  return typeof forge === 'string' && Object.hasOwn(GIT_FORGES, forge);
+}
+
+// Hosts próprios sem tipo escolhido são tratados como GitLab, o caso mais comum de instância interna
+function toGitHost(host, forge) {
+  return { host, forge: isValidForge(forge) ? forge : findKnownForge(host) || DEFAULT_FORGE };
 }
 
 // Remove contadores de notificação do início, como "(17) Inbox"
@@ -147,12 +207,14 @@ function enqueueSave(task) {
 
 async function loadGitHosts() {
   try {
-    const data = await chrome.storage.sync.get({ gitHosts: DEFAULT_GIT_HOSTS });
+    const data = await chrome.storage.sync.get({ gitHosts: DEFAULT_GIT_HOSTS, gitHostForges: {} });
     const stored = Array.isArray(data.gitHosts) ? data.gitHosts : DEFAULT_GIT_HOSTS;
-    currentGitHosts = [...new Set(stored.map(normalizeHost).filter(Boolean))];
+    const forges = data.gitHostForges && typeof data.gitHostForges === 'object' ? data.gitHostForges : {};
+    const hosts = [...new Set(stored.map(normalizeHost).filter(Boolean))];
+    currentGitHosts = hosts.map(host => toGitHost(host, Object.hasOwn(forges, host) ? forges[host] : null));
   } catch (e) {
     console.error('Falha ao carregar hosts Git:', e);
-    currentGitHosts = [...DEFAULT_GIT_HOSTS];
+    currentGitHosts = DEFAULT_GIT_HOSTS.map(host => toGitHost(host));
   }
   return currentGitHosts;
 }
@@ -163,7 +225,11 @@ function saveGitHosts(update) {
     if (hosts === currentGitHosts) return true;
 
     try {
-      await chrome.storage.sync.set({ gitHosts: hosts });
+      // O tipo fica numa chave separada para que versões anteriores continuem lendo gitHosts como lista de hosts
+      await chrome.storage.sync.set({
+        gitHosts: hosts.map(h => h.host),
+        gitHostForges: Object.fromEntries(hosts.map(h => [h.host, h.forge]))
+      });
     } catch (e) {
       console.error('Falha ao salvar hosts Git:', e);
       showDialogError('settings-error', `Não foi possível salvar: ${e.message}`);
@@ -251,29 +317,61 @@ function saveHistoryPeriod(id) {
   });
 }
 
-function parseGitRepository(url) {
+function parseGitRepository(url, forge) {
+  const rules = GIT_FORGES[forge];
   const segments = url.pathname.split('/').filter(Boolean);
-  if (segments.length < 2) return null;
+  // Páginas do próprio host contam para o domínio, como as URLs de um único segmento
+  if (segments.length < 2 || rules.reservedRoots.has(segments[0])) return null;
 
-  // Os dois primeiros segmentos (dono/repositório) nunca são tratados como palavras de parada
-  const cleanSegments = segments.slice(0, 2);
-  for (const seg of segments.slice(2)) {
-    if (GIT_STOP_KEYWORDS.has(seg)) break;
-    cleanSegments.push(seg);
-  }
+  const repo = rules.parse(segments);
+  if (!repo) return null;
 
-  const repoName = cleanSegments[cleanSegments.length - 1];
-  const groupSegments = cleanSegments.slice(0, cleanSegments.length - 1);
-  const fullRepoPath = cleanSegments.join('/');
+  const { groupSegments, repoName, rootSegmentCount } = repo;
+  const fullRepoPath = [...groupSegments, repoName].join('/');
+  const rootPath = segments.slice(0, rootSegmentCount).join('/');
 
   return {
     fullPath: safeDecode(fullRepoPath),
     projectGroup: safeDecode(groupSegments.join('/')),
     repoName: safeDecode(repoName),
-    repoUrl: `${url.origin}/${fullRepoPath}`,
-    uniqueKey: `${url.host}/${fullRepoPath}`,
-    isRoot: isRootUrl(url, cleanSegments.length)
+    repoUrl: `${url.origin}/${rootPath}`,
+    uniqueKey: `${url.host}/${rootPath}`,
+    isRoot: isRootUrl(url, rootSegmentCount, segments.length)
   };
+}
+
+// GitHub, Gitea/Forgejo e Bitbucket Cloud: sempre /dono/repositório, sem subgrupos
+function parseOwnerRepoPath(segments) {
+  return { groupSegments: [segments[0]], repoName: segments[1], rootSegmentCount: 2 };
+}
+
+function parseGitLabPath(segments) {
+  // Os dois primeiros segmentos (grupo/repositório) nunca são tratados como palavras de parada
+  const cleanSegments = segments.slice(0, 2);
+  for (const seg of segments.slice(2)) {
+    if (GITLAB_STOP_KEYWORDS.has(seg)) break;
+    cleanSegments.push(seg);
+  }
+  return {
+    groupSegments: cleanSegments.slice(0, -1),
+    repoName: cleanSegments[cleanSegments.length - 1],
+    rootSegmentCount: cleanSegments.length
+  };
+}
+
+// Bitbucket Server/Data Center usa /projects/CHAVE/repos/repo e /users/nome/repos/repo
+function parseBitbucketPath(segments) {
+  if (segments[0] !== 'projects' && segments[0] !== 'users') return parseOwnerRepoPath(segments);
+  if (segments[2] !== 'repos' || !segments[3]) return null;
+  return { groupSegments: [segments[1]], repoName: segments[3], rootSegmentCount: 4 };
+}
+
+// Azure DevOps: /org/projeto/_git/repo (ou /org/_git/repo). O "_git" fica na URL, mas não no nome
+// mostrado; as demais páginas (_boards, _build…) e a home do projeto são do projeto, não de um repositório
+function parseAzurePath(segments) {
+  const gitIndex = segments.indexOf('_git');
+  if (gitIndex < 1 || !segments[gitIndex + 1]) return null;
+  return { groupSegments: segments.slice(0, gitIndex), repoName: segments[gitIndex + 1], rootSegmentCount: gitIndex + 2 };
 }
 
 // --- Carregamento do Histórico ---
@@ -456,14 +554,15 @@ function findUrlGroupIndex(url) {
 }
 
 function categorizeHistory(entries) {
-  const gitHosts = new Set(currentGitHosts);
+  const gitForges = new Map(currentGitHosts.map(h => [h.host, h.forge]));
   const userGroups = new Map(currentUrlGroups.map(g => [g.id, new Map()]));
   const projectGroups = new Map();
   const domainCounts = new Map();
 
   const classified = entries.map(entry => {
     const hostname = entry.url.hostname.replace(/^www\./, '');
-    const repoInfo = gitHosts.has(hostname) ? parseGitRepository(entry.url) : null;
+    const forge = gitForges.get(hostname);
+    const repoInfo = forge ? parseGitRepository(entry.url, forge) : null;
     const domainKey = entry.url.host.replace(/^www\./, '');
     const key = repoInfo ? `repo:${repoInfo.uniqueKey}` : `domain:${domainKey}`;
     return { ...entry, hostname, repoInfo, domainKey, key, groupIndex: findUrlGroupIndex(entry.url) };
@@ -695,16 +794,20 @@ function createTagItem(contentEl, onDelete) {
 function renderModalList() {
   const listEl = document.getElementById('registered-domains');
 
-  listEl.replaceChildren(...currentGitHosts.map(domain => {
+  listEl.replaceChildren(...currentGitHosts.map(({ host, forge }) => {
     const label = document.createElement('span');
     label.className = 'tag-label';
 
     const nameEl = document.createElement('span');
-    nameEl.textContent = domain;
+    nameEl.textContent = host;
+
+    const forgeEl = document.createElement('span');
+    forgeEl.className = 'tag-forge';
+    forgeEl.textContent = GIT_FORGES[forge].label;
 
     // Sem a raiz no histórico, o Chrome procura um ícone qualquer do host
-    label.append(createFavicon(hostIconPages.get(domain) || `https://${domain}/`), nameEl);
-    return createTagItem(label, () => saveGitHosts(hosts => hosts.filter(h => h !== domain)));
+    label.append(createFavicon(hostIconPages.get(host) || `https://${host}/`), nameEl, forgeEl);
+    return createTagItem(label, () => saveGitHosts(hosts => hosts.filter(h => h.host !== host)));
   }));
 }
 
@@ -763,6 +866,22 @@ function setupDialog(dialog, openBtn, closeBtn, focusEl, onOpen) {
 
 function setupGitHostsModal() {
   const input = document.getElementById('domain-input');
+  const forgeSelect = document.getElementById('forge-select');
+
+  forgeSelect.replaceChildren(...Object.entries(GIT_FORGES).map(([id, { label }]) => {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = label;
+    return option;
+  }));
+  forgeSelect.value = DEFAULT_FORGE;
+
+  // Só hosts conhecidos mudam o tipo sozinhos, para não desfazer a escolha feita para um host próprio
+  input.addEventListener('input', () => {
+    const host = normalizeHost(input.value);
+    const known = host && findKnownForge(host);
+    if (known) forgeSelect.value = known;
+  });
 
   setupDialog(
     document.getElementById('settings-dialog'),
@@ -784,15 +903,26 @@ function setupGitHostsModal() {
       return;
     }
 
-    if (currentGitHosts.includes(host)) {
+    const forge = forgeSelect.value;
+    const reset = () => {
       input.value = '';
+      forgeSelect.value = DEFAULT_FORGE;
+    };
+
+    if (currentGitHosts.some(h => h.host === host && h.forge === forge)) {
+      reset();
       showDialogError('settings-error', '');
       return;
     }
 
-    if (await saveGitHosts(hosts => hosts.includes(host) ? hosts : [...hosts, host])) {
-      input.value = '';
-    }
+    // Adicionar de novo um host já cadastrado troca o tipo dele
+    const saved = await saveGitHosts(hosts => {
+      const existing = hosts.find(h => h.host === host);
+      if (existing?.forge === forge) return hosts;
+      const entry = { host, forge };
+      return existing ? hosts.map(h => h === existing ? entry : h) : [...hosts, entry];
+    });
+    if (saved) reset();
   };
 
   document.getElementById('add-domain-btn').addEventListener('click', handleAdd);

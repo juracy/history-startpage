@@ -5,8 +5,10 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 ## 🚀 Funcionalidades
 
 - **Agregação Inteligente de Repositórios Git:**
-  - Suporta GitHub, GitLab, Gitea, Forgejo e instâncias privadas/self-hosted.
-  - Normaliza subpastas e rotas internas (ignora `/-/`, `/tree/`, `/pulls`, etc.).
+  - Suporta GitHub, GitLab (com subgrupos), Gitea, Forgejo, Bitbucket (Cloud e Server), Azure DevOps (`/org/projeto/_git/repo`) e instâncias privadas/self-hosted.
+  - Cada host tem um tipo de forja, que define como o endereço é lido. Hosts conhecidos (`github.com`, `gitlab.com`, `bitbucket.org`, `dev.azure.com`, `*.visualstudio.com`, `gitea.com`, `codeberg.org`) são detectados; hosts próprios são tratados como GitLab, a menos que outro tipo seja escolhido ao adicioná-los.
+  - Normaliza subpastas e rotas internas (`/-/`, `/tree/`, `/src/`, `/pulls`, etc.) para a raiz do repositório.
+  - Páginas do próprio host (`/settings`, `/orgs`, `/dashboard`, `/explore`…) contam para o domínio, e não como repositórios.
   - Agrupa repositórios por Organização / Workspace / Subgrupo.
 - **Domínios Mais Acessados:**
   - Extrai e consolida o host raiz dos seus sites mais frequentados no período, evitando poluição de URLs específicas.
@@ -19,7 +21,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 - **Favicons:**
   - Cada repositório, domínio e host Git mostra o ícone do site, lido do cache local de favicons do Chrome (permissão `favicon`), sem nenhuma requisição externa — funciona também com hosts internos. Sites sem ícone em cache aparecem com o globo padrão.
 - **Configuração Dinâmica in-browser:**
-  - Modal nativo para adicionar e remover instâncias Git personalizadas sem editar código.
+  - Modal nativo para adicionar e remover instâncias Git personalizadas, escolhendo o tipo de forja, sem editar código.
   - Sincronização via `chrome.storage.sync`.
 - **Privacidade Total:**
   - 100% client-side. Nenhum dado de navegação sai da sua máquina.
