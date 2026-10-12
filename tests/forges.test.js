@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_FORGE, findKnownForge, parseGitRepository, toGitHost } from '../lib/forges.js';
+import { DEFAULT_FORGE, findKnownForge, parseGitRepository, toGitHost, upsertGitHost } from '../lib/forges.js';
 
 const parse = (url, forge) => parseGitRepository(new URL(url), forge);
 
@@ -133,5 +133,25 @@ describe('toGitHost', () => {
 
   it('não aceita propriedades herdadas como tipo', () => {
     expect(toGitHost('git.empresa.com', 'toString').forge).toBe(DEFAULT_FORGE);
+  });
+});
+
+describe('upsertGitHost', () => {
+  const hosts = [{ host: 'github.com', forge: 'github' }, { host: 'git.empresa.com', forge: 'gitlab' }];
+
+  it('acrescenta um host novo no fim', () => {
+    expect(upsertGitHost(hosts, { host: 'gitea.com', forge: 'gitea' })).toEqual([
+      ...hosts, { host: 'gitea.com', forge: 'gitea' }
+    ]);
+  });
+
+  it('troca o tipo de um host já cadastrado, mantendo a posição', () => {
+    expect(upsertGitHost(hosts, { host: 'github.com', forge: 'gitea' })).toEqual([
+      { host: 'github.com', forge: 'gitea' }, hosts[1]
+    ]);
+  });
+
+  it('devolve a mesma lista quando nada muda', () => {
+    expect(upsertGitHost(hosts, { host: 'git.empresa.com', forge: 'gitlab' })).toBe(hosts);
   });
 });

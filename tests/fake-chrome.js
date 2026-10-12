@@ -19,7 +19,15 @@ export function createFakeChrome({ storage = {}, visits = [] } = {}) {
         throw error;
       }
       Object.assign(data, structuredClone(items));
+      const changes = Object.fromEntries(Object.keys(items).map(key => [key, { newValue: structuredClone(items[key]) }]));
+      for (const listener of listeners) listener(changes, 'sync');
     }
+  };
+  const listeners = [];
+  const onChanged = {
+    addListener: listener => listeners.push(listener),
+    // Simula uma gravação feita por outra página ou dispositivo
+    emit: (changes, area = 'sync') => listeners.forEach(listener => listener(changes, area))
   };
 
   // visits: [{ url, title, visitTime }]; cada URL vira um item com o horário da visita mais recente,
@@ -50,7 +58,7 @@ export function createFakeChrome({ storage = {}, visits = [] } = {}) {
     }
   };
 
-  return { storage: { sync: store }, history };
+  return { storage: { sync: store, onChanged }, history };
 }
 
 export function installFakeChrome(options) {

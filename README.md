@@ -27,13 +27,14 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Funciona como lançador: `Enter` abre o primeiro resultado, `Ctrl+Enter` o abre em segundo plano e `↑`/`↓` percorrem os cards.
 - **Ocultar Itens:**
   - O `×` que aparece no canto de cada card (ao passar o mouse ou chegar nele com `Tab`) tira o repositório ou domínio do painel, inclusive da busca — útil para buscadores, webmail e páginas de login.
-  - O botão **⊘ Ocultos**, que só aparece quando há itens ocultos, lista o que foi escondido e permite mostrar de novo. A lista é sincronizada via `chrome.storage.sync`.
+  - O botão **⊘ Ocultos**, que só aparece quando há itens ocultos, abre as configurações (ou a aba delas já aberta) direto na lista do que foi escondido, onde é possível mostrar de novo. A lista é sincronizada via `chrome.storage.sync`.
 - **Favicons:**
   - Cada repositório, domínio e host Git mostra o ícone do site, lido do cache local de favicons do Chrome (permissão `favicon`), sem nenhuma requisição externa — funciona também com hosts internos. Sites sem ícone em cache aparecem com o globo padrão.
-- **Configuração Dinâmica in-browser:**
-  - Modal nativo para adicionar e remover instâncias Git personalizadas, escolhendo o tipo de forja, sem editar código.
-  - Modal **▦ Agrupamentos** para juntar domínios e repositórios sob um título pelo trecho do endereço. Os agrupamentos podem ser editados (✎) e reordenados (↑/↓); a ordem importa, porque quem casa com mais de um agrupamento fica no primeiro da lista.
-  - Sincronização via `chrome.storage.sync`.
+- **Configurações:**
+  - Uma página única, aberta pelo botão **⚙ Configurações** do painel ou em `chrome://extensions` → **Detalhes** → **Opções da extensão**, com três seções: hosts Git, agrupamentos e itens ocultos.
+  - **Hosts Git:** adicione e remova instâncias personalizadas, escolhendo o tipo de forja, sem editar código.
+  - **Agrupamentos:** junte domínios e repositórios sob um título pelo trecho do endereço. Os agrupamentos podem ser editados (✎, `Esc` cancela) e reordenados (↑/↓); a ordem importa, porque quem casa com mais de um agrupamento fica no primeiro da lista.
+  - Sincronização via `chrome.storage.sync`; os painéis abertos se atualizam na hora, sem recarregar o histórico.
 - **Privacidade Total:**
   - 100% client-side. Nenhum dado de navegação sai da sua máquina.
 
@@ -41,8 +42,12 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 
 ```text
 ├── manifest.json       # Configuração da extensão Manifest V3
-├── index.html          # Layout visual e interface do modal
-├── app.js              # Estado, renderização, modais, período e busca
+├── index.html          # Layout visual do painel
+├── app.js              # Estado, renderização, período e busca do painel
+├── options.html        # Página de configurações (hosts Git, agrupamentos, ocultos)
+├── options.js          # Formulários e listas da página de configurações
+├── common.css          # Cores e estilos comuns às duas páginas
+├── dom.js              # Pedaços de interface comuns às duas páginas (favicons, mensagens)
 ├── lib/                # Lógica testável, em módulos ES
 │   ├── constants.js    # Períodos, limites e hosts padrão
 │   ├── text.js         # Normalização de hosts, títulos, busca e URLs
@@ -87,14 +92,14 @@ Por padrão, a extensão monitora `github.com` e `gitlab.com`.
 
 Para adicionar instâncias corporativas ou self-hosted:
 1. Abra uma nova aba.
-2. Clique no botão **⚙ Configurar Git** no canto superior direito.
+2. Clique no botão **⚙ Configurações** no canto superior direito (ou abra as opções da extensão em `chrome://extensions`).
 3. Insira o host da sua instância (exemplo: `gitlab.empresa.local`, `git.meudominio.com`).
 4. Pressione Enter ou clique em **Adicionar**.
-5. O painel reprocessará seu histórico automaticamente com os novos agrupamentos.
+5. Os painéis abertos reagrupam o histórico automaticamente com os novos hosts.
 
 ## 🎨 Tema com matugen
 
-As cores do painel podem acompanhar o papel de parede via [matugen](https://github.com/InioX/matugen). Como a extensão é carregada sem compactação, o Chrome lê os arquivos direto da pasta a cada nova aba: basta o matugen gerar um `theme.css` aqui dentro, sem recarregar a extensão. Sem esse arquivo, valem as cores padrão definidas em `index.html`.
+As cores do painel podem acompanhar o papel de parede via [matugen](https://github.com/InioX/matugen). Como a extensão é carregada sem compactação, o Chrome lê os arquivos direto da pasta a cada nova aba: basta o matugen gerar um `theme.css` aqui dentro, sem recarregar a extensão. Sem esse arquivo, valem as cores padrão definidas em `common.css`. O mesmo `theme.css` vale para o painel e para a página de configurações.
 
 1. Crie o template `~/.config/matugen/templates/chrome-startpage.css`:
    ```css

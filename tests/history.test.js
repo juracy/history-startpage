@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DAY_MS, HISTORY_PAGE_SIZE } from '../lib/constants.js';
-import { buildHistoryEntries, buildHostIconPages, fetchHistoryItems } from '../lib/history.js';
+import { buildHistoryEntries, buildHostIconPages, fetchHistoryItems, fetchHostIconPages } from '../lib/history.js';
 import { installFakeChrome } from './fake-chrome.js';
 
 const always = () => true;
@@ -74,5 +74,23 @@ describe('buildHostIconPages', () => {
       .map(rawUrl => ({ url: new URL(rawUrl), rawUrl }));
 
     expect(buildHostIconPages(entries)).toEqual(new Map([['example.com', 'https://www.example.com/']]));
+  });
+});
+
+describe('fetchHostIconPages', () => {
+  it('acha a raiz mais recente de cada host em todo o histórico, ignorando URLs que não são web', async () => {
+    installFakeChrome({
+      visits: [
+        { url: 'https://www.example.com/', visitTime: now - 400 * DAY_MS },
+        { url: 'https://example.com/', visitTime: now - 500 * DAY_MS },
+        { url: 'http://intranet.local/', visitTime: now - 1000 },
+        { url: 'chrome://settings/', visitTime: now - 10 }
+      ]
+    });
+
+    expect(await fetchHostIconPages()).toEqual(new Map([
+      ['intranet.local', 'http://intranet.local/'],
+      ['example.com', 'https://www.example.com/']
+    ]));
   });
 });

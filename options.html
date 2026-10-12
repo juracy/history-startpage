@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Configurações</title>
+  <link rel="stylesheet" href="common.css">
+  <style>
+    html {
+      scroll-behavior: smooth;
+    }
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0 0 1rem;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+    }
+    nav a {
+      text-decoration: none;
+    }
+    section {
+      margin-bottom: 2.5rem;
+      /* A âncora não deixa o título colado no topo da janela */
+      scroll-margin-top: 1rem;
+    }
+    h2 {
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin: 0 0 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    .help {
+      margin-top: 0;
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 1.5rem 1rem;
+      }
+      .input-row {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+  <!-- Gerado pelo matugen a partir do papel de parede; sobrescreve as cores de common.css -->
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Configurações</h1>
+    <nav aria-label="Seções">
+      <a class="btn" href="#hosts">Hosts Git</a>
+      <a class="btn" href="#agrupamentos">Agrupamentos</a>
+      <a class="btn" href="#ocultos">Itens ocultos</a>
+    </nav>
+
+    <section id="hosts" aria-labelledby="hosts-title">
+      <h2 id="hosts-title">Domínios Git Monitorados</h2>
+      <p class="help">
+        Adicione hosts públicos ou internos (ex: <code>gitlab.corp.local</code>, <code>git.interno.com</code>).
+        O tipo define como o endereço é lido; para trocar o tipo de um host, adicione-o de novo.
+      </p>
+
+      <div class="input-row">
+        <input type="text" id="domain-input" placeholder="ex: gitlab.empresa.com" aria-label="Host Git" autocomplete="off" />
+        <select id="forge-select" aria-label="Tipo de forja"></select>
+        <button id="add-domain-btn" class="btn btn-primary">Adicionar</button>
+      </div>
+      <p id="hosts-error" class="error-msg" role="alert" hidden></p>
+
+      <div id="registered-domains" class="tag-list"></div>
+    </section>
+
+    <section id="agrupamentos" aria-labelledby="groups-title">
+      <h2 id="groups-title">Agrupamentos</h2>
+      <p class="help">
+        Junte domínios e repositórios sob um título pelo trecho do endereço (ex: <code>openshift</code>, <code>.prevnet</code>).
+        Basta uma URL casar para o domínio ou repositório inteiro entrar no agrupamento; se casar com mais de um, vale o primeiro da lista
+        (use ↑ e ↓ para mudar a ordem e ✎ para editar).
+      </p>
+
+      <div class="input-row">
+        <input type="text" id="group-title-input" placeholder="Título" aria-label="Título do agrupamento" autocomplete="off" />
+        <input type="text" id="group-pattern-input" placeholder="Trecho da URL" aria-label="Trecho da URL" autocomplete="off" />
+        <button id="add-group-btn" class="btn btn-primary">Adicionar</button>
+        <button id="cancel-group-edit-btn" class="btn" hidden>Cancelar</button>
+      </div>
+      <p id="groups-error" class="error-msg" role="alert" hidden></p>
+
+      <div id="registered-groups" class="tag-list"></div>
+    </section>
+
+    <section id="ocultos" aria-labelledby="hidden-title">
+      <h2 id="hidden-title">Itens Ocultos</h2>
+      <p class="help">
+        Repositórios e domínios ocultos pelo <code>×</code> no canto do card não aparecem no painel, nem na busca.
+        Use <strong>Mostrar</strong> para que um item volte a aparecer.
+      </p>
+      <p id="hidden-error" class="error-msg" role="alert" hidden></p>
+
+      <div id="registered-hidden" class="tag-list"></div>
+    </section>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

@@ -13,7 +13,7 @@ toc::[]
 . Cache do resultado processado, com o progresso do primeiro carregamento (<<cache>>, <<progresso>>).
 . Busca que encontra uma página interna, com destaque dos termos (<<pagina-interna>>, <<destacar>>).
 . Ordenar por recência ou "frecency" (<<frecency>>).
-. Unificar as configurações e, sobre ela, desfazer remoções, restaurar os hosts Git padrão e exportar/importar (<<configuracoes>>, <<desfazer>>, <<hosts-padrao>>, <<exportar>>).
+. Na página de configurações (`options.html`), desfazer remoções, restaurar os hosts Git padrão e exportar/importar (<<desfazer>>, <<hosts-padrao>>, <<exportar>>).
 . Fixar favoritos e tema claro (<<favoritos>>, <<tema-claro>>).
 
 == Funcionalidades
@@ -40,7 +40,7 @@ O `lastVisitTime` já está em cada entrada do cache, então ordenar por recênc
 
 Exportar e importar hosts Git, agrupamentos e período em JSON.
 
-Também vale tratar o limite de 8 KB por item do `chrome.storage.sync` (`QUOTA_BYTES_PER_ITEM`): com muitos agrupamentos, a chave `urlGroups` pode estourar, e hoje a falha só aparece como erro genérico no modal.
+Também vale tratar o limite de 8 KB por item do `chrome.storage.sync` (`QUOTA_BYTES_PER_ITEM`): com muitos agrupamentos, a chave `urlGroups` pode estourar, e hoje a falha só aparece como erro genérico na seção de agrupamentos.
 
 [[hosts-padrao]]
 === Restaurar os hosts Git padrão
@@ -66,10 +66,13 @@ Algo como "Carregando… 1.200 de 4.800 páginas" já ajudaria.
 O botão `×` dos hosts Git e dos agrupamentos remove na hora, sem confirmação.
 Um aviso temporário com "Desfazer" é suficiente e não interrompe o fluxo.
 
-[[configuracoes]]
-=== Unificar as configurações
+[[edicao-concorrente]]
+=== Edição de agrupamento concorrente com outro dispositivo
 
-Os três modais (hosts Git, agrupamentos e ocultos) poderiam virar uma única tela de configurações, também registrada como `options_ui` no `manifest.json`, para abrir a partir de `chrome://extensions`.
+As gravações já releem o storage antes de aplicar a mudança, mas o formulário de edição de agrupamento ainda parte do que estava em memória:
+
+* se outro dispositivo renomear ou mudar o trecho do agrupamento em edição, o formulário continua com os valores antigos, e *Salvar* desfaz a mudança remota sem aviso;
+* a checagem de trecho repetido é feita antes de a gravação entrar na fila; se uma sincronização trouxer o mesmo trecho nesse meio-tempo, `updateGroup` recusa a mudança, mas a gravação conta como bem-sucedida e o formulário sai do modo de edição, descartando o que foi digitado.
 
 [[a11y]]
 == Visual e acessibilidade

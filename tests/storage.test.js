@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  createSaveQueue, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups, writeGitHosts
+  createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups,
+  watchSyncedSettings, writeGitHosts, writeHiddenItems
 } from '../lib/storage.js';
 import { installFakeChrome } from './fake-chrome.js';
 
@@ -131,5 +132,72 @@ describe('createSaveQueue', () => {
 
     await expect(failed).rejects.toThrow('falhou');
     await expect(next).resolves.toBe('ok');
+  });
+});
+
+describe('createSyncedSetting', () => {
+  const createHidden = (onChange = () => {}) => createSyncedSetting({
+    keys: ['hiddenItems'], read: readHiddenItems, write: writeHiddenItems, enqueue: createSaveQueue(), onChange
+  });
+
+  it('carrega o valor e avisa só quando ele muda', async () => {
+    const chrome = installFakeChrome({ storage: { hiddenItems: ['domain:a.com'] } });
+    const onChange = vi.fn();
+    const hidden = createHidden(onChange);
+
+    await hidden.refresh();
+    await hidden.refresh();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(['domain:a.com']);
+
+    chrome.storage.sync.data.hiddenItems = ['domain:a.com', 'domain:b.com'];
+    await hidden.refresh();
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('aplica a gravação sobre o que está no storage, não sobre a cópia em memória', async () => {
+    const chrome = installFakeChrome({ storage: { hiddenItems: ['domain:a.com'] } });
+    const hidden = createHidden();
+    await hidden.refresh();
+
+    // Outra aba ocultou b.com depois da última leitura desta
+    chrome.storage.sync.data.hiddenItems = ['domain:a.com', 'domain:b.com'];
+    await hidden.save(keys => keys.filter(k => k !== 'domain:a.com'));
+
+    expect(chrome.storage.sync.data.hiddenItems).toEqual(['domain:b.com']);
+  });
+
+  it('não grava quando update devolve o mesmo valor', async () => {
+    const chrome = installFakeChrome({ storage: { hiddenItems: ['domain:a.com'] } });
+    const set = vi.spyOn(chrome.storage.sync, 'set');
+    await createHidden().save(keys => keys);
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('rejeita e mantém o valor quando a gravação falha', async () => {
+    const chrome = installFakeChrome();
+    const onChange = vi.fn();
+    const hidden = createHidden(onChange);
+    await hidden.refresh();
+
+    chrome.storage.sync.failNextSet = new Error('cota excedida');
+    await expect(hidden.save(keys => [...keys, 'domain:a.com'])).rejects.toThrow('cota excedida');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith([]);
+  });
+});
+
+describe('watchSyncedSettings', () => {
+  it('relê só as configurações cujas chaves mudaram no storage.sync', async () => {
+    const chrome = installFakeChrome();
+    const hosts = { keys: ['gitHosts', 'gitHostForges'], refresh: vi.fn() };
+    const hidden = { keys: ['hiddenItems'], refresh: vi.fn() };
+    watchSyncedSettings([hosts, hidden]);
+
+    chrome.storage.onChanged.emit({ gitHostForges: {} });
+    chrome.storage.onChanged.emit({ hiddenItems: [] }, 'session');
+
+    expect(hosts.refresh).toHaveBeenCalledTimes(1);
+    expect(hidden.refresh).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,178 @@
+/* Estilos comuns ao painel (index.html) e à página de configurações (options.html).
+   As cores podem ser sobrescritas pelo theme.css do matugen, carregado depois */
+:root {
+  --bg: #0f172a;
+  --card-bg: #1e293b;
+  --card-hover: #334155;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #38bdf8;
+  --on-accent: #0f172a;
+  --accent-hover: #7dd3fc;
+  --border: #334155;
+  --danger: #f87171;
+}
+body {
+  margin: 0;
+  padding: 3rem 2rem;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.btn {
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background 0.15s;
+}
+.btn:hover {
+  background: var(--card-hover);
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  border: none;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+[hidden] {
+  display: none !important;
+}
+.item-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.tag-label .item-icon {
+  width: 16px;
+  height: 16px;
+}
+.empty-state {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* Formulários e listas da página de configurações */
+.input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.input-row input {
+  flex: 1;
+}
+.input-row input, .input-row select {
+  min-width: 0;
+  font-family: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  outline: none;
+}
+.input-row input:focus, .input-row select:focus {
+  border-color: var(--accent);
+}
+.input-row select option {
+  background: var(--card-bg);
+  color: var(--text);
+}
+.tag-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-forge {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.tag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+}
+.tag-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.tag-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.tag-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.15rem;
+}
+.tag-text code {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.help {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: -0.5rem;
+}
+.tag-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+.tag-item.editing {
+  border-color: var(--accent);
+}
+.btn-action {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.1rem 0.35rem;
+}
+.btn-action:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--card-hover);
+}
+.btn-action:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.btn-delete {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 0.25rem;
+}
+.error-msg {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin: -0.5rem 0 1rem;
+}
