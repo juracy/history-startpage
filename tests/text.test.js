@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cleanTitle, normalizeHost, normalizePattern, parseSearchTerms, parseWebUrl, safeDecode, stripRepoTitle
+  cleanTitle, normalizeHost, normalizePattern, parseSearchTerms, parseWebUrl, safeDecode, splitItemKey, stripRepoTitle
 } from '../lib/text.js';
 
 describe('normalizeHost', () => {
@@ -69,5 +69,17 @@ describe('parseWebUrl', () => {
     expect(parseWebUrl('http://127.0.0.1/')).toBeNull();
     expect(parseWebUrl('não é url')).toBeNull();
     expect(parseWebUrl('')).toBeNull();
+  });
+});
+
+describe('splitItemKey', () => {
+  it.each([
+    ['repo:github.com/dono/repo', { kind: 'repo', name: 'github.com/dono/repo' }],
+    ['domain:intranet:8080', { kind: 'domain', name: 'intranet:8080' }],
+    ['domain:', null],
+    ['outro:x', null],
+    ['semprefixo', null]
+  ])('%j → %j', (key, expected) => {
+    expect(splitItemKey(key)).toEqual(expected);
   });
 });

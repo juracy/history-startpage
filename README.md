@@ -120,7 +120,7 @@ As cores do painel podem acompanhar o papel de parede via [matugen](https://gith
 | `Shift+F6` | Leva o foco da barra de endereço para a busca do painel (o `F6` também funciona, mas passa antes pela faixa de abas). |
 | `/` | Foca a busca de qualquer ponto da página. |
 | `Esc` | Limpa a busca. |
-| `Enter` (na busca) | Abre o primeiro resultado. |
+| `Enter` (na busca) | Abre o primeiro resultado, se houver algo digitado. |
 | `Ctrl+Enter` | Abre o primeiro resultado (ou o card focado) numa aba em segundo plano. |
 | `↑` / `↓` | Percorrem os cards a partir da busca; `↑` no primeiro card volta para a busca. |
 | `Alt+T` | Abre o painel numa nova aba com o cursor já na busca. |

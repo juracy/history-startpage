@@ -1,4 +1,4 @@
-import { categorizeHistory, splitItemKey } from './lib/categorize.js';
+import { categorizeHistory } from './lib/categorize.js';
 import { DEFAULT_GIT_HOSTS, DEFAULT_PERIOD_ID, HISTORY_PERIODS, findPeriod } from './lib/constants.js';
 import { DEFAULT_FORGE, GIT_FORGES, findKnownForge, toGitHost } from './lib/forges.js';
 import { moveGroup, updateGroup } from './lib/groups.js';
@@ -7,7 +7,7 @@ import {
   createSaveQueue, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups,
   writeGitHosts, writeHiddenItems, writeHistoryPeriod, writeUrlGroups
 } from './lib/storage.js';
-import { normalizeHost, normalizePattern, parseSearchTerms } from './lib/text.js';
+import { normalizeHost, normalizePattern, parseSearchTerms, safeDecode, splitItemKey } from './lib/text.js';
 
 const SEARCH_DEBOUNCE_MS = 200;
 const PERIOD_DEBOUNCE_MS = 400;
@@ -249,7 +249,7 @@ function createItemCard({ key, name, url, count, title, iconPageUrl }) {
   hideBtn.textContent = '×';
   hideBtn.title = 'Ocultar do painel';
   hideBtn.setAttribute('aria-label', `Ocultar ${name}`);
-  hideBtn.addEventListener('click', () => hideItem(key, a));
+  hideBtn.addEventListener('click', () => hideItem(key, a, hideBtn));
 
   const row = document.createElement('div');
   row.className = 'item-row';
@@ -257,13 +257,21 @@ function createItemCard({ key, name, url, count, title, iconPageUrl }) {
   return row;
 }
 
-// Ao ocultar pelo teclado, o foco passa para o card que ocupa o lugar do removido
-async function hideItem(key, card) {
+// Ao ocultar pelo teclado, o foco passa para o card que ocupa o lugar do removido. O Chrome
+// também foca o botão no clique do mouse; só :focus-visible distingue os dois casos.
+// Se a gravação falhar, o erro aparece no modal de ocultos, pois o card não tem onde mostrá-lo
+async function hideItem(key, card, hideBtn) {
   const index = getResultCards().indexOf(card);
-  const hadFocus = card.parentElement.contains(document.activeElement);
+  const byKeyboard = hideBtn.matches(':focus-visible');
 
   const hidden = await saveHiddenItems(keys => keys.includes(key) ? keys : [...keys, key]);
-  if (!hidden || !hadFocus) return;
+  if (!hidden) {
+    renderHiddenModalList();
+    document.getElementById('hidden-dialog').showModal();
+    document.getElementById('close-hidden-btn').focus();
+    return;
+  }
+  if (!byKeyboard) return;
 
   const cards = getResultCards();
   (cards[index] || cards[cards.length - 1] || document.getElementById('search-input')).focus();
@@ -494,7 +502,7 @@ function renderHiddenModalList() {
 
     const nameEl = document.createElement('span');
     nameEl.className = 'tag-name';
-    nameEl.textContent = parsed.name;
+    nameEl.textContent = safeDecode(parsed.name);
 
     const kindEl = document.createElement('span');
     kindEl.className = 'tag-forge';
@@ -770,6 +778,8 @@ function setupSearch() {
       apply();
     } else if (e.key === 'Enter') {
       apply();
+      // Sem busca, um Enter por reflexo (logo após o Alt+T, por exemplo) não deve navegar
+      if (searchTerms.length === 0) return;
       const first = getResultCards()[0];
       if (!first) return;
       e.preventDefault();

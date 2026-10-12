@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categorizeHistory, splitItemKey } from '../lib/categorize.js';
+import { categorizeHistory } from '../lib/categorize.js';
 import { normalizeSearchText, parseSearchTerms, safeDecode } from '../lib/text.js';
 
 // Mesmo formato das entradas montadas por buildHistoryEntries
@@ -150,17 +150,5 @@ describe('itens ocultos', () => {
     });
     expect(userGroups.get('g').size).toBe(0);
     expect(domainCounts.size).toBe(0);
-  });
-});
-
-describe('splitItemKey', () => {
-  it.each([
-    ['repo:github.com/dono/repo', { kind: 'repo', name: 'github.com/dono/repo' }],
-    ['domain:intranet:8080', { kind: 'domain', name: 'intranet:8080' }],
-    ['domain:', null],
-    ['outro:x', null],
-    ['semprefixo', null]
-  ])('%j → %j', (key, expected) => {
-    expect(splitItemKey(key)).toEqual(expected);
   });
 });
