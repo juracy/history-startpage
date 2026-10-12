@@ -20,7 +20,7 @@ Extensão Chrome Manifest V3 que substitui a New Tab Page por um painel com os r
 - `background.js`: só trata o comando `open-search`, abrindo `index.html` como página comum da extensão (assim o foco vai para a página e o `autofocus` coloca o cursor na busca, em vez da barra de endereço).
 - `index.html`: layout, CSS inline e os dois `<dialog>` (hosts Git e agrupamentos). As cores são variáveis CSS em `:root`; `theme.css` (opcional, não versionado, gerado pelo matugen) é carregado depois e as sobrescreve.
 - `app.js`: carregado com `<script type="module">`; guarda o estado (`currentGitHosts`, `currentUrlGroups`, `searchTerms`, `historyEntries`…) e cuida de renderização, modais, período e busca.
-- `lib/`: lógica sem DOM, importável pelos testes. `constants.js`, `text.js`, `forges.js` e `categorize.js` são puros (o estado chega por parâmetro); só `history.js` e `storage.js` usam `chrome.*`, que nos testes é o substituto de `tests/fake-chrome.js`. Não use DOM nem estado global em `lib/`.
+- `lib/`: lógica sem DOM, importável pelos testes. `constants.js`, `text.js`, `forges.js`, `categorize.js` e `groups.js` são puros (o estado chega por parâmetro); só `history.js` e `storage.js` usam `chrome.*`, que nos testes é o substituto de `tests/fake-chrome.js`. Não use DOM nem estado global em `lib/`.
 - `tests/`: testes Vitest em ambiente Node, um arquivo por módulo de `lib/`.
 
 ### Fluxo de dados

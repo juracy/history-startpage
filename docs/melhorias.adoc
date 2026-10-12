@@ -10,18 +10,10 @@ toc::[]
 
 == Ordem recomendada
 
-. Editar e reordenar agrupamentos (<<agrupamentos>>).
 . Ocultar itens (<<ocultar>>).
 . "Ver mais" e resultados completos durante a busca (<<ver-mais>>).
 
 == Funcionalidades
-
-[[agrupamentos]]
-=== Editar e reordenar agrupamentos
-
-Hoje só é possível remover e recriar.
-Como a regra é "o primeiro da lista vence", a ordem tem efeito real sobre o painel, e não há como alterá-la.
-Também seria útil editar o título e o trecho da URL de um agrupamento existente.
 
 [[ocultar]]
 === Ocultar itens

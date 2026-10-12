@@ -1,6 +1,7 @@
 import { categorizeHistory } from './lib/categorize.js';
 import { DEFAULT_GIT_HOSTS, DEFAULT_PERIOD_ID, HISTORY_PERIODS, findPeriod } from './lib/constants.js';
 import { DEFAULT_FORGE, GIT_FORGES, findKnownForge, toGitHost } from './lib/forges.js';
+import { moveGroup, updateGroup } from './lib/groups.js';
 import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
 import {
   createSaveQueue, readGitHosts, readHistoryPeriod, readUrlGroups,
@@ -21,6 +22,9 @@ let historyLoadId = 0;
 
 // Agrupamentos do usuário: [{ id, title, pattern }]; a primeira regra que casar vence
 let currentUrlGroups = [];
+
+// Agrupamento carregado no formulário do modal para edição; null = formulário de inclusão
+let editingGroupId = null;
 
 // Cache do histórico já processado: [{ url: URL, visits }], do acesso mais recente ao mais antigo
 let historyEntries = null;
@@ -297,7 +301,17 @@ function showDialogError(id, message) {
   el.hidden = !message;
 }
 
-function createTagItem(contentEl, onDelete) {
+function createActionButton(text, label, onClick) {
+  const btn = document.createElement('button');
+  btn.className = 'btn-action';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  btn.textContent = text;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function createTagItem(contentEl, onDelete, actionButtons = []) {
   const div = document.createElement('div');
   div.className = 'tag-item';
 
@@ -307,7 +321,11 @@ function createTagItem(contentEl, onDelete) {
   btn.textContent = '×';
   btn.addEventListener('click', onDelete);
 
-  div.append(contentEl, btn);
+  const actions = document.createElement('span');
+  actions.className = 'tag-actions';
+  actions.append(...actionButtons, btn);
+
+  div.append(contentEl, actions);
   return div;
 }
 
@@ -339,7 +357,7 @@ function renderGroupsModalList() {
     return;
   }
 
-  listEl.replaceChildren(...currentUrlGroups.map(group => {
+  listEl.replaceChildren(...currentUrlGroups.map((group, index) => {
     const content = document.createElement('span');
     content.className = 'tag-text';
 
@@ -350,8 +368,50 @@ function renderGroupsModalList() {
     patternEl.textContent = group.pattern;
 
     content.append(titleEl, patternEl);
-    return createTagItem(content, () => saveUrlGroups(groups => groups.filter(g => g.id !== group.id)));
+
+    const upBtn = createActionButton('↑', `Subir ${group.title}`, () => moveUrlGroup(group.id, -1));
+    upBtn.dataset.action = 'up';
+    upBtn.disabled = index === 0;
+
+    const downBtn = createActionButton('↓', `Descer ${group.title}`, () => moveUrlGroup(group.id, 1));
+    downBtn.dataset.action = 'down';
+    downBtn.disabled = index === currentUrlGroups.length - 1;
+
+    const editBtn = createActionButton('✎', `Editar ${group.title}`, () => setGroupEditing(group));
+
+    const item = createTagItem(content, async () => {
+      const removed = await saveUrlGroups(groups => groups.filter(g => g.id !== group.id));
+      if (removed && editingGroupId === group.id) setGroupEditing(null);
+    }, [upBtn, downBtn, editBtn]);
+    item.dataset.groupId = group.id;
+    item.classList.toggle('editing', group.id === editingGroupId);
+    return item;
   }));
+}
+
+// A lista é redesenhada ao salvar; o foco volta para o botão do item movido ou, se ele
+// chegou à ponta e o botão ficou desabilitado, para o de sentido contrário
+async function moveUrlGroup(id, delta) {
+  const moved = await saveUrlGroups(groups => moveGroup(groups, id, delta));
+  if (!moved) return;
+
+  const item = document.querySelector(`#registered-groups [data-group-id="${CSS.escape(id)}"]`);
+  const same = item?.querySelector(`[data-action="${delta < 0 ? 'up' : 'down'}"]`);
+  const other = item?.querySelector(`[data-action="${delta < 0 ? 'down' : 'up'}"]`);
+  (same && !same.disabled ? same : other)?.focus();
+}
+
+// Carrega um agrupamento no formulário do modal para edição, ou volta ao modo de inclusão
+function setGroupEditing(group) {
+  const titleInput = document.getElementById('group-title-input');
+  editingGroupId = group?.id ?? null;
+  titleInput.value = group?.title ?? '';
+  document.getElementById('group-pattern-input').value = group?.pattern ?? '';
+  document.getElementById('add-group-btn').textContent = group ? 'Salvar' : 'Adicionar';
+  document.getElementById('cancel-group-edit-btn').hidden = !group;
+  showDialogError('groups-error', '');
+  renderGroupsModalList();
+  titleInput.focus();
 }
 
 // Ignora o Enter que confirma uma composição de IME (acentos, etc.)
@@ -450,19 +510,31 @@ function setupGitHostsModal() {
 }
 
 function setupUrlGroupsModal() {
+  const dialog = document.getElementById('groups-dialog');
   const titleInput = document.getElementById('group-title-input');
   const patternInput = document.getElementById('group-pattern-input');
 
   setupDialog(
-    document.getElementById('groups-dialog'),
+    dialog,
     document.getElementById('open-groups-btn'),
     document.getElementById('close-groups-btn'),
     titleInput,
     () => {
+      // Uma edição deixada pela metade não volta ao reabrir o modal
+      if (editingGroupId) setGroupEditing(null);
       showDialogError('groups-error', '');
       renderGroupsModalList();
     }
   );
+
+  // Durante a edição, o Esc cancela a edição em vez de fechar o modal
+  dialog.addEventListener('cancel', (e) => {
+    if (!editingGroupId) return;
+    e.preventDefault();
+    setGroupEditing(null);
+  });
+
+  document.getElementById('cancel-group-edit-btn').addEventListener('click', () => setGroupEditing(null));
 
   const handleAdd = async () => {
     const title = titleInput.value.trim();
@@ -473,8 +545,15 @@ function setupUrlGroupsModal() {
       return;
     }
 
-    if (currentUrlGroups.some(g => g.pattern === pattern)) {
+    if (currentUrlGroups.some(g => g.pattern === pattern && g.id !== editingGroupId)) {
       showDialogError('groups-error', 'Já existe um agrupamento com este trecho.');
+      return;
+    }
+
+    if (editingGroupId) {
+      const id = editingGroupId;
+      const saved = await saveUrlGroups(groups => updateGroup(groups, id, { title, pattern }));
+      if (saved && editingGroupId === id) setGroupEditing(null);
       return;
     }
 

@@ -301,6 +301,33 @@
       color: var(--text-muted);
       margin-top: -0.5rem;
     }
+    .tag-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.15rem;
+      flex-shrink: 0;
+      margin-left: 0.5rem;
+    }
+    .tag-item.editing {
+      border-color: var(--accent);
+    }
+    .btn-action {
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0.1rem 0.35rem;
+    }
+    .btn-action:hover:not(:disabled) {
+      color: var(--text);
+      background: var(--card-hover);
+    }
+    .btn-action:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
     .btn-delete {
       background: transparent;
       border: none;
@@ -379,13 +406,15 @@
     <h2>Agrupamentos</h2>
     <p class="modal-help">
       Junte domínios e repositórios sob um título pelo trecho do endereço (ex: <code>openshift</code>, <code>.prevnet</code>).
-      Basta uma URL casar para o domínio ou repositório inteiro entrar no agrupamento; se casar com mais de um, vale o primeiro da lista.
+      Basta uma URL casar para o domínio ou repositório inteiro entrar no agrupamento; se casar com mais de um, vale o primeiro da lista
+      (use ↑ e ↓ para mudar a ordem e ✎ para editar).
     </p>
 
     <div class="input-row">
       <input type="text" id="group-title-input" placeholder="Título" autocomplete="off" />
       <input type="text" id="group-pattern-input" placeholder="Trecho da URL" autocomplete="off" />
       <button id="add-group-btn" class="btn btn-primary">Adicionar</button>
+      <button id="cancel-group-edit-btn" class="btn" hidden>Cancelar</button>
     </div>
     <p id="groups-error" class="error-msg" hidden></p>
 

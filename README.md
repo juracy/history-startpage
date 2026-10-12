@@ -23,6 +23,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Cada repositório, domínio e host Git mostra o ícone do site, lido do cache local de favicons do Chrome (permissão `favicon`), sem nenhuma requisição externa — funciona também com hosts internos. Sites sem ícone em cache aparecem com o globo padrão.
 - **Configuração Dinâmica in-browser:**
   - Modal nativo para adicionar e remover instâncias Git personalizadas, escolhendo o tipo de forja, sem editar código.
+  - Modal **▦ Agrupamentos** para juntar domínios e repositórios sob um título pelo trecho do endereço. Os agrupamentos podem ser editados (✎) e reordenados (↑/↓); a ordem importa, porque quem casa com mais de um agrupamento fica no primeiro da lista.
   - Sincronização via `chrome.storage.sync`.
 - **Privacidade Total:**
   - 100% client-side. Nenhum dado de navegação sai da sua máquina.
@@ -39,6 +40,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 │   ├── forges.js       # Regras de cada forja Git (GitHub, GitLab, Bitbucket…)
 │   ├── history.js      # Leitura do histórico e contagem de visitas no período
 │   ├── categorize.js   # Agregação em repositórios, domínios e agrupamentos
+│   ├── groups.js       # Edição e reordenação dos agrupamentos
 │   └── storage.js      # Leitura e gravação das configurações
 ├── tests/              # Testes unitários (Vitest)
 ├── background.js       # Atalho Alt+T que abre o painel com foco na busca
