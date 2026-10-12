@@ -9,7 +9,7 @@ import {
   createSaveQueue, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups,
   writeGitHosts, writeHiddenItems, writeHistoryPeriod, writeUrlGroups
 } from './lib/storage.js';
-import { normalizeHost, normalizePattern, parseSearchTerms, safeDecode, splitItemKey } from './lib/text.js';
+import { formatTimeAgo, normalizeHost, normalizePattern, parseSearchTerms, safeDecode, splitItemKey } from './lib/text.js';
 
 const SEARCH_DEBOUNCE_MS = 200;
 const PERIOD_DEBOUNCE_MS = 400;
@@ -223,11 +223,10 @@ function createFavicon(pageUrl) {
   return img;
 }
 
-function createItemCard({ key, name, url, count, title, iconPageUrl }) {
+function createItemCard({ key, name, url, count, lastVisitTime, title, iconPageUrl }) {
   const a = document.createElement('a');
   a.className = 'item-card';
   a.href = url;
-  a.title = title ? `${title}\n${url}` : url;
 
   const mainEl = document.createElement('span');
   mainEl.className = 'item-main';
@@ -249,10 +248,23 @@ function createItemCard({ key, name, url, count, title, iconPageUrl }) {
 
   const countEl = document.createElement('span');
   countEl.className = 'item-count';
-  countEl.textContent = count;
+  countEl.textContent = count.toLocaleString('pt-BR');
 
   mainEl.append(createFavicon(iconPageUrl), textEl);
   a.append(mainEl, countEl);
+
+  // O "há X" muda com o tempo e a aba pode ficar aberta por horas, então tooltip e rótulo
+  // são refeitos ao passar o mouse ou focar. O rótulo evita que o leitor de tela anuncie
+  // só o número solto ao final do nome
+  const updateLabels = () => {
+    const visits = `${count.toLocaleString('pt-BR')} ${count === 1 ? 'visita' : 'visitas'} ${currentPeriod.phrase}`;
+    const visitsText = lastVisitTime ? `${visits} · último acesso ${formatTimeAgo(lastVisitTime)}` : visits;
+    a.title = [title, url, visitsText].filter(Boolean).join('\n');
+    a.setAttribute('aria-label', [name, title, visitsText].filter(Boolean).join(', '));
+  };
+  updateLabels();
+  a.addEventListener('pointerenter', updateLabels);
+  a.addEventListener('focus', updateLabels);
 
   // O botão fica fora do link, pois um botão dentro de <a> é HTML inválido
   const hideBtn = document.createElement('button');
@@ -423,19 +435,24 @@ function createActionButton(text, label, onClick) {
   return btn;
 }
 
-function createTagItem(contentEl, onDelete, actionButtons = []) {
+// Sem onDelete, o item não tem o botão × (só as ações passadas)
+function createTagItem(contentEl, deleteLabel, onDelete, actionButtons = []) {
   const div = document.createElement('div');
   div.className = 'tag-item';
 
-  const btn = document.createElement('button');
-  btn.className = 'btn-delete';
-  btn.title = 'Remover';
-  btn.textContent = '×';
-  btn.addEventListener('click', onDelete);
-
   const actions = document.createElement('span');
   actions.className = 'tag-actions';
-  actions.append(...actionButtons, btn);
+  actions.append(...actionButtons);
+
+  if (onDelete) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-delete';
+    btn.title = deleteLabel;
+    btn.setAttribute('aria-label', deleteLabel);
+    btn.textContent = '×';
+    btn.addEventListener('click', onDelete);
+    actions.append(btn);
+  }
 
   div.append(contentEl, actions);
   return div;
@@ -457,7 +474,7 @@ function renderModalList() {
 
     // Sem a raiz no histórico, o Chrome procura um ícone qualquer do host
     label.append(createFavicon(hostIconPages.get(host) || `https://${host}/`), nameEl, forgeEl);
-    return createTagItem(label, () => saveGitHosts(hosts => hosts.filter(h => h.host !== host)));
+    return createTagItem(label, `Remover ${host}`, () => saveGitHosts(hosts => hosts.filter(h => h.host !== host)));
   }));
 }
 
@@ -491,7 +508,7 @@ function renderGroupsModalList() {
 
     const editBtn = createActionButton('✎', `Editar ${group.title}`, () => setGroupEditing(group));
 
-    const item = createTagItem(content, async () => {
+    const item = createTagItem(content, `Remover ${group.title}`, async () => {
       const removed = await saveUrlGroups(groups => groups.filter(g => g.id !== group.id));
       if (removed && editingGroupId === group.id) setGroupEditing(null);
     }, [upBtn, downBtn, editBtn]);
@@ -557,7 +574,9 @@ function renderHiddenModalList() {
     kindEl.textContent = parsed.kind === 'repo' ? 'repositório' : 'domínio';
 
     label.append(createFavicon(hostIconPages.get(host.replace(/^www\./, '')) || `https://${host}/`), nameEl, kindEl);
-    return createTagItem(label, () => saveHiddenItems(keys => keys.filter(k => k !== key)));
+    const showBtn = createActionButton('Mostrar', `Mostrar ${safeDecode(parsed.name)} de novo`,
+      () => saveHiddenItems(keys => keys.filter(k => k !== key)));
+    return createTagItem(label, '', null, [showBtn]);
   }));
 }
 

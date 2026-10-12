@@ -3,10 +3,10 @@ import { categorizeHistory } from '../lib/categorize.js';
 import { normalizeSearchText, parseSearchTerms, safeDecode } from '../lib/text.js';
 
 // Mesmo formato das entradas montadas por buildHistoryEntries
-function entry(rawUrl, visits, title = '') {
+function entry(rawUrl, visits, title = '', lastVisitTime = 0) {
   const url = new URL(rawUrl);
   return {
-    url, rawUrl, title, visits, lastVisitTime: 0,
+    url, rawUrl, title, visits, lastVisitTime,
     searchText: normalizeSearchText(`${safeDecode(url.host + url.pathname)}\n${title}`)
   };
 }
@@ -28,6 +28,7 @@ describe('categorizeHistory', () => {
       name: 'repo',
       url: 'https://github.com/dono/repo',
       count: 5,
+      lastVisitTime: 0,
       title: 'Descrição do repo',
       iconPageUrl: 'https://github.com/dono/repo'
     }]);
@@ -126,6 +127,27 @@ describe('categorizeHistory', () => {
       const { projectGroups } = categorize([entry('https://github.com/dono/repo', 1)], { hostIconPages });
       expect(projectGroups.get('github.com › dono').get('repo:github.com/dono/repo').iconPageUrl).toBe('https://github.com/');
     });
+  });
+});
+
+describe('último acesso', () => {
+  it('guarda o acesso mais recente entre as páginas do item', () => {
+    const { domainCounts } = categorize([
+      entry('https://example.com/a', 1, '', 3000),
+      entry('https://example.com/b', 5, '', 1000)
+    ]);
+    expect(domainCounts.get('domain:example.com').lastVisitTime).toBe(3000);
+  });
+
+  it('vale também para repositórios e agrupamentos', () => {
+    const { projectGroups, userGroups } = categorize([
+      entry('https://github.com/dono/repo/pull/1', 1, '', 5000),
+      entry('https://github.com/dono/repo', 2, '', 2000),
+      entry('https://jira.example.com/a', 1, '', 7000)
+    ], { urlGroups: [{ id: 'g', title: 'Jira', pattern: 'jira' }] });
+
+    expect(projectGroups.get('github.com › dono').get('repo:github.com/dono/repo').lastVisitTime).toBe(5000);
+    expect(userGroups.get('g').get('domain:jira.example.com').lastVisitTime).toBe(7000);
   });
 });
 

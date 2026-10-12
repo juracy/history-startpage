@@ -8,78 +8,81 @@ Dentro de cada seção, os itens estão em ordem decrescente de impacto.
 
 toc::[]
 
+== Ordem recomendada
+
+. Cache do resultado processado, com o progresso do primeiro carregamento (<<cache>>, <<progresso>>).
+. Busca que encontra uma página interna, com destaque dos termos (<<pagina-interna>>, <<destacar>>).
+. Ordenar por recência ou "frecency" (<<frecency>>).
+. Unificar as configurações e, sobre ela, desfazer remoções, restaurar os hosts Git padrão e exportar/importar (<<configuracoes>>, <<desfazer>>, <<hosts-padrao>>, <<exportar>>).
+. Fixar favoritos e tema claro (<<favoritos>>, <<tema-claro>>).
+
 == Funcionalidades
 
+[[favoritos]]
 === Fixar favoritos
 
 Itens fixados que apareceriam sempre, independentemente do histórico do período.
 
+[[pagina-interna]]
 === Busca que encontra uma página interna
 
 Se a busca casa com uma página interna (um PR, por exemplo), o card leva à raiz do repositório.
 Seria melhor mostrar as páginas que casaram como sublinks do card, ou ter uma seção "Páginas" durante a busca.
 
+[[frecency]]
 === Ordenar por recência ou "frecency"
 
 Hoje a ordenação considera só o número de visitas.
 O `lastVisitTime` já está em cada entrada do cache, então ordenar por recência, ou por uma combinação de frequência e recência, não exige dados novos.
 
+[[exportar]]
 === Exportar e importar a configuração
 
 Exportar e importar hosts Git, agrupamentos e período em JSON.
 
 Também vale tratar o limite de 8 KB por item do `chrome.storage.sync` (`QUOTA_BYTES_PER_ITEM`): com muitos agrupamentos, a chave `urlGroups` pode estourar, e hoje a falha só aparece como erro genérico no modal.
 
+[[hosts-padrao]]
 === Restaurar os hosts Git padrão
 
 Se o usuário remover `github.com` ou `gitlab.com`, hoje só consegue recolocá-los digitando.
 
 == Usabilidade
 
+[[destacar]]
 === Destacar os termos encontrados
 
 Realçar os termos da busca no nome e no título dos cards.
 
+[[progresso]]
 === Mostrar o progresso do carregamento
 
 Hoje aparece só "Carregando…", mas no período de 3 meses o carregamento faz milhares de chamadas a `chrome.history.getVisits`.
 Algo como "Carregando… 1.200 de 4.800 páginas" já ajudaria.
 
-=== Contexto no contador
-
-O número no card não diz o que representa.
-O tooltip poderia mostrar "N visitas no período · último acesso há 2 h".
-
+[[desfazer]]
 === Desfazer remoções
 
 O botão `×` dos hosts Git e dos agrupamentos remove na hora, sem confirmação.
 Um aviso temporário com "Desfazer" é suficiente e não interrompe o fluxo.
 
+[[configuracoes]]
 === Unificar as configurações
 
-Os dois modais poderiam virar uma única tela de configurações, também registrada como `options_ui` no `manifest.json`, para abrir a partir de `chrome://extensions`.
+Os três modais (hosts Git, agrupamentos e ocultos) poderiam virar uma única tela de configurações, também registrada como `options_ui` no `manifest.json`, para abrir a partir de `chrome://extensions`.
 
 [[a11y]]
 == Visual e acessibilidade
 
-=== Layout em telas estreitas
-
-O `.grid` tem sempre duas colunas e o header não quebra linha.
-Em janela dividida ao meio, tudo fica espremido.
-Falta um `@media` que passe para uma coluna.
-
+[[tema-claro]]
 === Tema claro
 
 Sem o `theme.css` do matugen, o painel é sempre escuro.
 Falta tratar `prefers-color-scheme: light`.
 
-=== Rótulos para leitores de tela
-
-* O botão `×` precisa de um `aria-label` com o nome do item ("Remover gitlab.empresa.com").
-* O contador do card precisa de um rótulo textual ("12 visitas").
-
 == Desempenho
 
+[[cache]]
 === Cache do resultado processado
 
 Cada nova aba refaz `chrome.history.search` e uma chamada a `getVisits` por URL.

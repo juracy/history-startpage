@@ -395,6 +395,26 @@
       display: flex;
       justify-content: flex-end;
     }
+
+    /* Janela dividida ao meio ou tela estreita: uma coluna e header que quebra linha */
+    @media (max-width: 760px) {
+      body {
+        padding: 1.5rem 1rem;
+      }
+      header {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      .header-actions {
+        flex-wrap: wrap;
+      }
+      .grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .url-groups {
+        grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      }
+    }
   </style>
   <!-- Gerado pelo matugen a partir do papel de parede; sobrescreve as cores acima -->
   <link rel="stylesheet" href="theme.css">
@@ -480,7 +500,7 @@
     <h2>Itens Ocultos</h2>
     <p class="modal-help">
       Repositórios e domínios ocultos pelo <code>×</code> no canto do card não aparecem no painel, nem na busca.
-      Remova um item da lista para que ele volte a aparecer.
+      Use <strong>Mostrar</strong> para que um item volte a aparecer.
     </p>
     <p id="hidden-error" class="error-msg" hidden></p>
 

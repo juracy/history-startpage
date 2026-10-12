@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cleanTitle, normalizeHost, normalizePattern, parseSearchTerms, parseWebUrl, safeDecode, splitItemKey, stripRepoTitle
+  cleanTitle, normalizeHost, normalizePattern, parseSearchTerms, parseWebUrl, safeDecode, splitItemKey, stripRepoTitle, formatTimeAgo
 } from '../lib/text.js';
 
 describe('normalizeHost', () => {
@@ -81,5 +81,20 @@ describe('splitItemKey', () => {
     ['semprefixo', null]
   ])('%j → %j', (key, expected) => {
     expect(splitItemKey(key)).toEqual(expected);
+  });
+});
+
+describe('formatTimeAgo', () => {
+  const now = Date.UTC(2026, 9, 12, 12);
+  const MIN = 60 * 1000;
+  it.each([
+    [now - 20 * 1000, 'agora há pouco'],
+    [now - 5 * MIN, 'há 5 minutos'],
+    [now - 1 * 60 * MIN, 'há 1 hora'],
+    [now - 26 * 60 * MIN, 'há 1 dia'],
+    [now - 45 * 24 * 60 * MIN, 'há 1 mês'],
+    [now + 5 * MIN, 'agora há pouco']
+  ])('%j → %j', (time, expected) => {
+    expect(formatTimeAgo(time, now)).toBe(expected);
   });
 });
