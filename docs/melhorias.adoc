@@ -83,6 +83,61 @@ As gravações já releem o storage antes de aplicar a mudança, mas o formulár
 Sem o `theme.css` do matugen, o painel é sempre escuro.
 Falta tratar `prefers-color-scheme: light`.
 
+[[matugen]]
+=== Integração com o matugen
+
+Com as cores geradas pelo matugen, falta contraste entre os títulos (das seções e dos agrupamentos) e os itens dos cards.
+O template do README mapeia só dez variáveis, e várias partes da interface acabam com a mesma cor.
+
+Proposta:
+
+* separar variáveis para títulos de seção, nome do item e texto secundário, em vez de reaproveitar `--text` e `--text-muted`;
+* avaliar outros papéis do Material You no mapeamento, como `secondary`, `tertiary`, `surface_container_low`/`highest` e `outline`;
+* conferir o contraste das combinações geradas (WCAG AA) com papéis de parede claros e escuros.
+
+[[distribuicao]]
+== Distribuição
+
+[[i18n]]
+=== Internacionalização
+
+Hoje todos os textos da interface estão em português, fixos no HTML e no JavaScript.
+Suportar, no mínimo, inglês, português e espanhol, com `chrome.i18n` e `_locales/{en,pt_BR,es}/messages.json`:
+
+* textos do `index.html`, do `options.html` e das mensagens montadas em `app.js`, `options.js` e `dom.js`;
+* nome, descrição e descrição do comando no `manifest.json`, via `+__MSG_*__+`;
+* números e datas formatados com `Intl` conforme o idioma.
+
+[[idioma-padrao]]
+=== Inglês como idioma padrão
+
+Com a internacionalização, o `default_locale` do manifesto passa a ser `en`, usado quando o idioma do navegador não tem tradução.
+Depende de <<i18n>>.
+
+[[chrome-web-store]]
+=== Publicação na Chrome Web Store
+
+Pendências antes de publicar:
+
+* ícones da extensão (16, 48 e 128 px), que o manifesto ainda não declara;
+* política de privacidade e justificativa da permissão `history` (os dados não saem do navegador);
+* capturas de tela, descrição da loja nos idiomas suportados (<<i18n>>) e um nome mais distintivo que "Custom Dynamic Dashboard";
+* script para gerar o `.zip` só com os arquivos da extensão, sem `tests/`, `docs/`, `node_modules/` e `theme.css`.
+
+Instalada pela loja, a extensão fica numa pasta gerenciada pelo Chrome, onde o matugen não consegue gravar o `theme.css`.
+A integração (<<matugen>>) precisa de outro caminho, como importar o tema pela página de configurações e guardá-lo no `chrome.storage.local`.
+
+[[pipeline]]
+=== Pipeline no GitHub Actions
+
+O repositório ainda não tem integração contínua: os testes só rodam localmente, e o pacote seria montado à mão.
+
+Proposta:
+
+* a cada push e pull request, `npm ci` e `npm test`;
+* build: gerar o `.zip` da extensão com o mesmo script da publicação (<<chrome-web-store>>), conferindo que a versão do `manifest.json` bate com a tag;
+* a cada tag `v*`, criar o release no GitHub com o `.zip` anexado e enviar o pacote à Chrome Web Store pela API da loja, com as credenciais OAuth guardadas nos secrets do repositório.
+
 == Desempenho
 
 [[cache]]
