@@ -31,11 +31,31 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 ```text
 ├── manifest.json       # Configuração da extensão Manifest V3
 ├── index.html          # Layout visual e interface do modal
-├── app.js              # Lógica de extração, agregação e storage
+├── app.js              # Estado, renderização, modais, período e busca
+├── lib/                # Lógica testável, em módulos ES
+│   ├── constants.js    # Períodos, limites e hosts padrão
+│   ├── text.js         # Normalização de hosts, títulos, busca e URLs
+│   ├── forges.js       # Regras de cada forja Git (GitHub, GitLab, Bitbucket…)
+│   ├── history.js      # Leitura do histórico e contagem de visitas no período
+│   ├── categorize.js   # Agregação em repositórios, domínios e agrupamentos
+│   └── storage.js      # Leitura e gravação das configurações
+├── tests/              # Testes unitários (Vitest)
 ├── background.js       # Atalho Alt+T que abre o painel com foco na busca
 ├── theme.css           # Cores geradas pelo matugen (opcional, não versionado)
 └── README.md           # Documentação
 ```
+
+## 🧪 Testes
+
+A extensão não tem build nem dependências; o Node só é usado para os testes da lógica em `lib/`, com um substituto mínimo das APIs `chrome.storage` e `chrome.history`:
+
+```bash
+npm install
+npm test            # uma execução
+npm run test:watch  # reexecuta a cada alteração
+```
+
+Ao empacotar a extensão, deixe de fora `node_modules/`, `tests/` e `package*.json`.
 
 ## 🛠️ Como Instalar no Google Chrome
 
