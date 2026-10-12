@@ -12,6 +12,8 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Agrupa repositórios por Organização / Workspace / Subgrupo.
 - **Domínios Mais Acessados:**
   - Extrai e consolida o host raiz dos seus sites mais frequentados no período, evitando poluição de URLs específicas.
+- **Listas Compactas:**
+  - O painel mostra 5 itens por grupo, 8 grupos de repositórios e 15 domínios; o botão **Mostrar mais N** abre o restante da lista (e **Mostrar menos** a recolhe). Durante a busca, o mesmo botão indica quantos resultados ficaram de fora.
 - **Seletor de Período:**
   - Escolha a janela do histórico no topo do painel: 24 horas, 1 semana, 1 mês (padrão), 3 meses, 6 meses ou 1 ano. A escolha é lembrada e sincronizada via `chrome.storage.sync`.
   - O Chrome costuma guardar só os últimos ~90 dias de histórico; por isso 6 meses e 1 ano normalmente mostram o mesmo que 3 meses.
@@ -122,7 +124,7 @@ As cores do painel podem acompanhar o papel de parede via [matugen](https://gith
 | `Esc` | Limpa a busca. |
 | `Enter` (na busca) | Abre o primeiro resultado, se houver algo digitado. |
 | `Ctrl+Enter` | Abre o primeiro resultado (ou o card focado) numa aba em segundo plano. |
-| `↑` / `↓` | Percorrem os cards a partir da busca; `↑` no primeiro card volta para a busca. |
+| `↑` / `↓` | Percorrem os cards e os botões "Mostrar mais" a partir da busca; `↑` no primeiro card volta para a busca. |
 | `Alt+T` | Abre o painel numa nova aba com o cursor já na busca. |
 
 ### O `Alt+T` não funciona

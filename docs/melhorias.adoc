@@ -8,26 +8,11 @@ Dentro de cada seção, os itens estão em ordem decrescente de impacto.
 
 toc::[]
 
-== Ordem recomendada
-
-. "Ver mais" e resultados completos durante a busca (<<ver-mais>>).
-
 == Funcionalidades
 
 === Fixar favoritos
 
 Itens fixados que apareceriam sempre, independentemente do histórico do período.
-
-[[ver-mais]]
-=== "Ver mais" nos limites fixos
-
-Os limites estão fixos no código: 5 repositórios por grupo, 8 grupos de repositórios e 15 domínios.
-Durante a busca, o corte esconde resultados sem nenhum aviso.
-
-Opções:
-
-* expandir o grupo com um clique ("ver mais");
-* não aplicar limite quando há busca ativa.
 
 === Busca que encontra uma página interna
 

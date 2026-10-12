@@ -1,5 +1,7 @@
 import { categorizeHistory } from './lib/categorize.js';
-import { DEFAULT_GIT_HOSTS, DEFAULT_PERIOD_ID, HISTORY_PERIODS, findPeriod } from './lib/constants.js';
+import {
+  DEFAULT_GIT_HOSTS, DEFAULT_PERIOD_ID, DOMAINS_LIMIT, HISTORY_PERIODS, ITEMS_PER_GROUP, REPO_GROUPS_LIMIT, findPeriod
+} from './lib/constants.js';
 import { DEFAULT_FORGE, GIT_FORGES, findKnownForge, toGitHost } from './lib/forges.js';
 import { moveGroup, updateGroup } from './lib/groups.js';
 import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
@@ -37,6 +39,12 @@ let hostIconPages = new Map();
 
 // Termos da busca já normalizados; vazio = sem filtro
 let searchTerms = [];
+
+// Listas abertas pelo "Mostrar mais" (ids como "domains" ou "repos:<grupo>"); zerado ao trocar o período
+const expandedLists = new Set();
+
+// Última categorização, reaproveitada quando só muda o que é exibido (abrir ou fechar uma lista)
+let lastCategorized = null;
 
 // --- Gerenciamento de Configurações (Storage) ---
 
@@ -175,14 +183,17 @@ async function loadHistory() {
 
 // --- Renderização na Interface ---
 
-function renderDashboard() {
+function renderDashboard({ recategorize = true } = {}) {
   updateUrlGroupsVisibility();
   if (!historyEntries) return;
 
-  const { userGroups, projectGroups, domainCounts } = categorizeHistory(historyEntries, {
-    gitHosts: currentGitHosts, urlGroups: currentUrlGroups, searchTerms, hostIconPages,
-    hiddenKeys: new Set(hiddenItems)
-  });
+  if (recategorize || !lastCategorized) {
+    lastCategorized = categorizeHistory(historyEntries, {
+      gitHosts: currentGitHosts, urlGroups: currentUrlGroups, searchTerms, hostIconPages,
+      hiddenKeys: new Set(hiddenItems)
+    });
+  }
+  const { userGroups, projectGroups, domainCounts } = lastCategorized;
   renderUrlGroups(userGroups);
   renderCategorizedRepos(projectGroups);
   renderTopDomains(domainCounts);
@@ -281,7 +292,43 @@ function sortByCount(bucket) {
   return Array.from(bucket.values()).sort((a, b) => b.count - a.count);
 }
 
-function createGroupBlock(title, items, emptyMessage) {
+// Até `limit` itens e, se houver mais, o botão "Mostrar mais"/"Mostrar menos". Vale também
+// durante a busca: o botão diz quantos resultados faltam, sem o custo de desenhar todos a cada tecla.
+// O primeiro item além do limite ganha data-first-extra, para onde o foco vai ao expandir
+function limitedNodes(listId, items, limit, render, [singular, plural]) {
+  const expanded = expandedLists.has(listId);
+  const nodes = (expanded ? items : items.slice(0, limit)).map(render);
+  if (items.length <= limit) return nodes;
+  if (expanded) nodes[limit].dataset.firstExtra = '';
+
+  const rest = items.length - limit;
+  const btn = document.createElement('button');
+  btn.className = 'list-toggle';
+  btn.dataset.listId = listId;
+  btn.textContent = expanded ? 'Mostrar menos' : `Mostrar mais ${rest} ${rest === 1 ? singular : plural}`;
+  btn.addEventListener('click', () => toggleList(listId));
+  return [...nodes, btn];
+}
+
+// O redesenho substitui o botão, então o foco é devolvido ao novo (ao recolher, isso também
+// traz a lista de volta à vista). Pelo teclado, expandir leva ao primeiro item que estava escondido
+function toggleList(listId) {
+  const byKeyboard = document.activeElement?.matches(':focus-visible');
+  const expanding = !expandedLists.has(listId);
+  if (expanding) expandedLists.add(listId);
+  else expandedLists.delete(listId);
+  renderDashboard({ recategorize: false });
+
+  const newBtn = document.querySelector(`.list-toggle[data-list-id="${CSS.escape(listId)}"]`);
+  if (!newBtn) return;
+  const firstExtra = expanding && byKeyboard
+    ? newBtn.parentElement.querySelector(':scope > [data-first-extra] .item-card')
+    : null;
+  if (firstExtra) firstExtra.focus();
+  else newBtn.focus({ preventScroll: expanding });
+}
+
+function createGroupBlock(listId, title, items, emptyMessage, noun) {
   const groupBlock = document.createElement('div');
   groupBlock.className = 'project-group';
 
@@ -295,7 +342,7 @@ function createGroupBlock(title, items, emptyMessage) {
   if (items.length === 0) {
     renderMessage(list, emptyMessage);
   } else {
-    list.append(...items.slice(0, 5).map(createItemCard));
+    list.append(...limitedNodes(listId, items, ITEMS_PER_GROUP, createItemCard, noun));
   }
 
   groupBlock.appendChild(list);
@@ -316,7 +363,8 @@ function renderUrlGroups(userGroups) {
 
   document.getElementById('url-groups-section').hidden = groups.length === 0;
   container.replaceChildren(...groups.map(group =>
-    createGroupBlock(group.title, sortByCount(userGroups.get(group.id)), `Nenhum acesso ${currentPeriod.phrase}.`)
+    createGroupBlock(`group:${group.id}`, group.title, sortByCount(userGroups.get(group.id)),
+      `Nenhum acesso ${currentPeriod.phrase}.`, ['item', 'itens'])
   ));
 }
 
@@ -336,25 +384,25 @@ function renderCategorizedRepos(projectGroups) {
       const totalVisits = repos.reduce((acc, r) => acc + r.count, 0);
       return { groupName, repos, totalVisits };
     })
-    .sort((a, b) => b.totalVisits - a.totalVisits)
-    .slice(0, 8);
+    .sort((a, b) => b.totalVisits - a.totalVisits);
 
-  container.replaceChildren(...sortedGroups.map(group =>
-    createGroupBlock(group.groupName, group.repos, '')
+  container.replaceChildren(...limitedNodes('repo-groups', sortedGroups, REPO_GROUPS_LIMIT, group =>
+    createGroupBlock(`repos:${group.groupName}`, group.groupName, group.repos, '', ['repositório', 'repositórios']),
+    ['grupo', 'grupos']
   ));
 }
 
 function renderTopDomains(domainCounts) {
   const container = document.getElementById('top-domains');
 
-  const top = sortByCount(domainCounts).slice(0, 15);
+  const domains = sortByCount(domainCounts);
 
-  if (top.length === 0) {
+  if (domains.length === 0) {
     renderMessage(container, searchTerms.length > 0 ? 'Nenhum domínio encontrado.' : 'Nenhum domínio registrado.');
     return;
   }
 
-  container.replaceChildren(...top.map(createItemCard));
+  container.replaceChildren(...limitedNodes('domains', domains, DOMAINS_LIMIT, createItemCard, ['domínio', 'domínios']));
 }
 
 // --- Controles dos Modais ---
@@ -711,6 +759,7 @@ function setupPeriodSelect() {
     if (!period || period === currentPeriod) return;
     currentPeriod = period;
     updatePeriodTitle();
+    expandedLists.clear();
     startHistoryLoading();
 
     clearTimeout(timer);
@@ -728,17 +777,22 @@ function getResultCards() {
   return Array.from(document.querySelectorAll('.container .item-card'));
 }
 
-// ↑/↓ percorrem os cards; ↑ no primeiro volta para a busca. Enter e Ctrl+Enter num card
+// O que as setas percorrem: os cards e os botões "Mostrar mais" entre eles
+function getNavigableItems() {
+  return Array.from(document.querySelectorAll('.container .item-card, .container .list-toggle'));
+}
+
+// ↑/↓ percorrem os cards e os botões "Mostrar mais"; ↑ no primeiro volta para a busca. Enter e Ctrl+Enter num card
 // focado já são tratados pelo próprio link
 function setupResultsNavigation(input) {
   document.querySelector('.container').addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
 
-    const card = e.target.closest('.item-card');
+    const card = e.target.closest('.item-card, .list-toggle');
     if (!card) return;
 
-    const cards = getResultCards();
+    const cards = getNavigableItems();
     const index = cards.indexOf(card);
     e.preventDefault();
     if (e.key === 'ArrowDown') {
