@@ -164,6 +164,35 @@
       outline: 2px solid var(--accent);
       outline-offset: 1px;
     }
+    .item-row {
+      position: relative;
+    }
+    /* Selo no canto do card, para não cobrir o contador */
+    .item-hide {
+      position: absolute;
+      top: -0.4rem;
+      right: -0.4rem;
+      width: 1.25rem;
+      height: 1.25rem;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .item-row:hover .item-hide, .item-hide:focus-visible {
+      opacity: 1;
+    }
+    .item-hide:hover, .item-hide:focus-visible {
+      color: var(--danger);
+      border-color: var(--danger);
+      outline: none;
+    }
     .item-main {
       display: flex;
       align-items: center;
@@ -254,6 +283,11 @@
     .input-row select option {
       background: var(--card-bg);
       color: var(--text);
+    }
+    .tag-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .tag-forge {
       font-size: 0.75rem;
@@ -356,6 +390,7 @@
       <div class="header-actions">
         <select id="period-select" class="btn period-select" aria-label="Período do histórico"
           title="Período do histórico (o Chrome costuma guardar só os últimos 90 dias)"></select>
+        <button id="open-hidden-btn" class="btn" hidden>⊘ Ocultos</button>
         <button id="open-groups-btn" class="btn">▦ Agrupamentos</button>
         <button id="open-settings-btn" class="btn">⚙ Configurar Git</button>
       </div>
@@ -422,6 +457,21 @@
 
     <div class="modal-actions">
       <button id="close-groups-btn" class="btn">Fechar</button>
+    </div>
+  </dialog>
+
+  <dialog id="hidden-dialog">
+    <h2>Itens Ocultos</h2>
+    <p class="modal-help">
+      Repositórios e domínios ocultos pelo <code>×</code> no canto do card não aparecem no painel, nem na busca.
+      Remova um item da lista para que ele volte a aparecer.
+    </p>
+    <p id="hidden-error" class="error-msg" hidden></p>
+
+    <div id="registered-hidden" class="tag-list"></div>
+
+    <div class="modal-actions">
+      <button id="close-hidden-btn" class="btn">Fechar</button>
     </div>
   </dialog>
 

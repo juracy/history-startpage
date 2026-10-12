@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categorizeHistory } from '../lib/categorize.js';
+import { categorizeHistory, splitItemKey } from '../lib/categorize.js';
 import { normalizeSearchText, parseSearchTerms, safeDecode } from '../lib/text.js';
 
 // Mesmo formato das entradas montadas por buildHistoryEntries
@@ -11,8 +11,8 @@ function entry(rawUrl, visits, title = '') {
   };
 }
 
-function categorize(entries, { gitHosts = [{ host: 'github.com', forge: 'github' }], urlGroups = [], search = '', hostIconPages = new Map() } = {}) {
-  return categorizeHistory(entries, { gitHosts, urlGroups, searchTerms: parseSearchTerms(search), hostIconPages });
+function categorize(entries, { gitHosts = [{ host: 'github.com', forge: 'github' }], urlGroups = [], search = '', hostIconPages = new Map(), hidden = [] } = {}) {
+  return categorizeHistory(entries, { gitHosts, urlGroups, searchTerms: parseSearchTerms(search), hostIconPages, hiddenKeys: new Set(hidden) });
 }
 
 describe('categorizeHistory', () => {
@@ -24,6 +24,7 @@ describe('categorizeHistory', () => {
 
     expect([...projectGroups.keys()]).toEqual(['github.com › dono']);
     expect([...projectGroups.get('github.com › dono').values()]).toEqual([{
+      key: 'repo:github.com/dono/repo',
       name: 'repo',
       url: 'https://github.com/dono/repo',
       count: 5,
@@ -125,5 +126,41 @@ describe('categorizeHistory', () => {
       const { projectGroups } = categorize([entry('https://github.com/dono/repo', 1)], { hostIconPages });
       expect(projectGroups.get('github.com › dono').get('repo:github.com/dono/repo').iconPageUrl).toBe('https://github.com/');
     });
+  });
+});
+
+describe('itens ocultos', () => {
+  const entries = [
+    entry('https://github.com/dono/repo', 2),
+    entry('https://github.com/dono/outro', 1),
+    entry('https://example.com/a', 3),
+    entry('https://mail.example.com/', 1)
+  ];
+
+  it('descarta repositórios e domínios ocultos', () => {
+    const { projectGroups, domainCounts } = categorize(entries, { hidden: ['repo:github.com/dono/repo', 'domain:example.com'] });
+    expect([...projectGroups.get('github.com › dono').keys()]).toEqual(['repo:github.com/dono/outro']);
+    expect([...domainCounts.keys()]).toEqual(['domain:mail.example.com']);
+  });
+
+  it('não deixa um item oculto levar outro para um agrupamento', () => {
+    const { userGroups, domainCounts } = categorize([entry('https://example.com/a', 1)], {
+      urlGroups: [{ id: 'g', title: 'G', pattern: 'example' }],
+      hidden: ['domain:example.com']
+    });
+    expect(userGroups.get('g').size).toBe(0);
+    expect(domainCounts.size).toBe(0);
+  });
+});
+
+describe('splitItemKey', () => {
+  it.each([
+    ['repo:github.com/dono/repo', { kind: 'repo', name: 'github.com/dono/repo' }],
+    ['domain:intranet:8080', { kind: 'domain', name: 'intranet:8080' }],
+    ['domain:', null],
+    ['outro:x', null],
+    ['semprefixo', null]
+  ])('%j → %j', (key, expected) => {
+    expect(splitItemKey(key)).toEqual(expected);
   });
 });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  createSaveQueue, readGitHosts, readHistoryPeriod, readUrlGroups, writeGitHosts
+  createSaveQueue, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups, writeGitHosts
 } from '../lib/storage.js';
 import { installFakeChrome } from './fake-chrome.js';
 
@@ -83,6 +83,20 @@ describe('readUrlGroups', () => {
   it('ignora valores que não são lista', async () => {
     installFakeChrome({ storage: { urlGroups: 'quebrado' } });
     expect(await readUrlGroups()).toEqual([]);
+  });
+});
+
+describe('readHiddenItems', () => {
+  it('descarta chaves inválidas e repetidas', async () => {
+    installFakeChrome({
+      storage: { hiddenItems: [' domain:example.com ', 'domain:example.com', 'repo:github.com/dono/repo', 'lixo', 42, null] }
+    });
+    expect(await readHiddenItems()).toEqual(['domain:example.com', 'repo:github.com/dono/repo']);
+  });
+
+  it('ignora valores que não são lista', async () => {
+    installFakeChrome({ storage: { hiddenItems: 'quebrado' } });
+    expect(await readHiddenItems()).toEqual([]);
   });
 });
 

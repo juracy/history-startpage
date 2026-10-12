@@ -19,6 +19,9 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Filtra repositórios, domínios e agrupamentos enquanto você digita, pela URL ou pelo título das páginas visitadas (sem diferenciar maiúsculas nem acentos; `Esc` limpa).
   - Como o Chrome dá o foco da nova aba à barra de endereço, use `Shift+F6` para ir à busca, `/` quando a página já tem o foco, ou `Alt+T` para abrir o painel com o cursor já na busca (o atalho pode ser trocado em `chrome://extensions/shortcuts`).
   - Funciona como lançador: `Enter` abre o primeiro resultado, `Ctrl+Enter` o abre em segundo plano e `↑`/`↓` percorrem os cards.
+- **Ocultar Itens:**
+  - O `×` que aparece no canto de cada card (ao passar o mouse ou chegar nele com `Tab`) tira o repositório ou domínio do painel, inclusive da busca — útil para buscadores, webmail e páginas de login.
+  - O botão **⊘ Ocultos**, que só aparece quando há itens ocultos, lista o que foi escondido e permite mostrar de novo. A lista é sincronizada via `chrome.storage.sync`.
 - **Favicons:**
   - Cada repositório, domínio e host Git mostra o ícone do site, lido do cache local de favicons do Chrome (permissão `favicon`), sem nenhuma requisição externa — funciona também com hosts internos. Sites sem ícone em cache aparecem com o globo padrão.
 - **Configuração Dinâmica in-browser:**

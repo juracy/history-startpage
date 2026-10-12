@@ -10,18 +10,9 @@ toc::[]
 
 == Ordem recomendada
 
-. Ocultar itens (<<ocultar>>).
 . "Ver mais" e resultados completos durante a busca (<<ver-mais>>).
 
 == Funcionalidades
-
-[[ocultar]]
-=== Ocultar itens
-
-Não há como tirar do painel domínios como buscador, webmail ou páginas de login da intranet.
-`EXCLUDED_HOSTS` é fixo no código.
-
-Proposta: um botão de ocultar no card e uma lista de exclusões em `chrome.storage.sync`, editável numa tela de configurações.
 
 === Fixar favoritos
 

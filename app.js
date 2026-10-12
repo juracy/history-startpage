@@ -1,11 +1,11 @@
-import { categorizeHistory } from './lib/categorize.js';
+import { categorizeHistory, splitItemKey } from './lib/categorize.js';
 import { DEFAULT_GIT_HOSTS, DEFAULT_PERIOD_ID, HISTORY_PERIODS, findPeriod } from './lib/constants.js';
 import { DEFAULT_FORGE, GIT_FORGES, findKnownForge, toGitHost } from './lib/forges.js';
 import { moveGroup, updateGroup } from './lib/groups.js';
 import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
 import {
-  createSaveQueue, readGitHosts, readHistoryPeriod, readUrlGroups,
-  writeGitHosts, writeHistoryPeriod, writeUrlGroups
+  createSaveQueue, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups,
+  writeGitHosts, writeHiddenItems, writeHistoryPeriod, writeUrlGroups
 } from './lib/storage.js';
 import { normalizeHost, normalizePattern, parseSearchTerms } from './lib/text.js';
 
@@ -25,6 +25,9 @@ let currentUrlGroups = [];
 
 // Agrupamento carregado no formulário do modal para edição; null = formulário de inclusão
 let editingGroupId = null;
+
+// Chaves dos itens ocultos pelo usuário ("repo:host/caminho" ou "domain:host")
+let hiddenItems = [];
 
 // Cache do histórico já processado: [{ url: URL, visits }], do acesso mais recente ao mais antigo
 let historyEntries = null;
@@ -91,6 +94,34 @@ function saveUrlGroups(update) {
   });
 }
 
+async function loadHiddenItems() {
+  hiddenItems = await readHiddenItems();
+  updateHiddenButton();
+  return hiddenItems;
+}
+
+function saveHiddenItems(update) {
+  return enqueueSave(async () => {
+    const keys = update(hiddenItems);
+    if (keys === hiddenItems) return true;
+
+    try {
+      await writeHiddenItems(keys);
+    } catch (e) {
+      console.error('Falha ao salvar itens ocultos:', e);
+      showDialogError('hidden-error', `Não foi possível salvar: ${e.message}`);
+      return false;
+    }
+
+    showDialogError('hidden-error', '');
+    hiddenItems = keys;
+    updateHiddenButton();
+    renderHiddenModalList();
+    renderDashboard();
+    return true;
+  });
+}
+
 async function loadHistoryPeriod() {
   currentPeriod = await readHistoryPeriod();
   return currentPeriod;
@@ -149,7 +180,8 @@ function renderDashboard() {
   if (!historyEntries) return;
 
   const { userGroups, projectGroups, domainCounts } = categorizeHistory(historyEntries, {
-    gitHosts: currentGitHosts, urlGroups: currentUrlGroups, searchTerms, hostIconPages
+    gitHosts: currentGitHosts, urlGroups: currentUrlGroups, searchTerms, hostIconPages,
+    hiddenKeys: new Set(hiddenItems)
   });
   renderUrlGroups(userGroups);
   renderCategorizedRepos(projectGroups);
@@ -180,7 +212,7 @@ function createFavicon(pageUrl) {
   return img;
 }
 
-function createItemCard({ name, url, count, title, iconPageUrl }) {
+function createItemCard({ key, name, url, count, title, iconPageUrl }) {
   const a = document.createElement('a');
   a.className = 'item-card';
   a.href = url;
@@ -210,7 +242,31 @@ function createItemCard({ name, url, count, title, iconPageUrl }) {
 
   mainEl.append(createFavicon(iconPageUrl), textEl);
   a.append(mainEl, countEl);
-  return a;
+
+  // O botão fica fora do link, pois um botão dentro de <a> é HTML inválido
+  const hideBtn = document.createElement('button');
+  hideBtn.className = 'item-hide';
+  hideBtn.textContent = '×';
+  hideBtn.title = 'Ocultar do painel';
+  hideBtn.setAttribute('aria-label', `Ocultar ${name}`);
+  hideBtn.addEventListener('click', () => hideItem(key, a));
+
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  row.append(a, hideBtn);
+  return row;
+}
+
+// Ao ocultar pelo teclado, o foco passa para o card que ocupa o lugar do removido
+async function hideItem(key, card) {
+  const index = getResultCards().indexOf(card);
+  const hadFocus = card.parentElement.contains(document.activeElement);
+
+  const hidden = await saveHiddenItems(keys => keys.includes(key) ? keys : [...keys, key]);
+  if (!hidden || !hadFocus) return;
+
+  const cards = getResultCards();
+  (cards[index] || cards[cards.length - 1] || document.getElementById('search-input')).focus();
 }
 
 function sortByCount(bucket) {
@@ -414,6 +470,41 @@ function setGroupEditing(group) {
   titleInput.focus();
 }
 
+// O botão só aparece quando há algo para mostrar de novo
+function updateHiddenButton() {
+  const btn = document.getElementById('open-hidden-btn');
+  btn.hidden = hiddenItems.length === 0;
+  btn.textContent = `⊘ Ocultos (${hiddenItems.length})`;
+}
+
+function renderHiddenModalList() {
+  const listEl = document.getElementById('registered-hidden');
+
+  if (hiddenItems.length === 0) {
+    renderMessage(listEl, 'Nenhum item oculto.');
+    return;
+  }
+
+  listEl.replaceChildren(...hiddenItems.map(key => {
+    const label = document.createElement('span');
+    label.className = 'tag-label';
+
+    const parsed = splitItemKey(key);
+    const host = parsed.kind === 'repo' ? parsed.name.split('/')[0] : parsed.name;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'tag-name';
+    nameEl.textContent = parsed.name;
+
+    const kindEl = document.createElement('span');
+    kindEl.className = 'tag-forge';
+    kindEl.textContent = parsed.kind === 'repo' ? 'repositório' : 'domínio';
+
+    label.append(createFavicon(hostIconPages.get(host.replace(/^www\./, '')) || `https://${host}/`), nameEl, kindEl);
+    return createTagItem(label, () => saveHiddenItems(keys => keys.filter(k => k !== key)));
+  }));
+}
+
 // Ignora o Enter que confirma uma composição de IME (acentos, etc.)
 function onEnter(input, handler) {
   input.addEventListener('keydown', (e) => {
@@ -573,6 +664,19 @@ function setupUrlGroupsModal() {
   onEnter(patternInput, handleAdd);
 }
 
+function setupHiddenModal() {
+  setupDialog(
+    document.getElementById('hidden-dialog'),
+    document.getElementById('open-hidden-btn'),
+    document.getElementById('close-hidden-btn'),
+    document.getElementById('close-hidden-btn'),
+    () => {
+      showDialogError('hidden-error', '');
+      renderHiddenModalList();
+    }
+  );
+}
+
 // --- Período ---
 
 function updatePeriodTitle() {
@@ -722,7 +826,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSearch();
   setupGitHostsModal();
   setupUrlGroupsModal();
-  await Promise.all([loadGitHosts(), loadUrlGroups(), loadHistoryPeriod()]);
+  setupHiddenModal();
+  await Promise.all([loadGitHosts(), loadUrlGroups(), loadHiddenItems(), loadHistoryPeriod()]);
   setupPeriodSelect();
   await loadHistory();
 });
