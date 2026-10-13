@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DAY_MS, HISTORY_PAGE_SIZE } from '../lib/constants.js';
-import { buildHistoryEntries, buildHostIconPages, fetchHistoryItems, fetchHostIconPages } from '../lib/history.js';
+import {
+  buildHistoryEntries, buildHostIconPages, collectVisits, fetchHistoryItems, fetchHostIconPages
+} from '../lib/history.js';
 import { installFakeChrome } from './fake-chrome.js';
 
 const always = () => true;
@@ -28,7 +30,50 @@ describe('fetchHistoryItems', () => {
   });
 });
 
+async function loadEntries(periodMs) {
+  const startTime = now - periodMs;
+  const records = await collectVisits(await fetchHistoryItems(startTime, always), startTime, always);
+  return buildHistoryEntries(records, startTime);
+}
+
+describe('collectVisits', () => {
+  it('guarda os horários das visitas dentro do período, com o título limpo', async () => {
+    installFakeChrome({
+      visits: [
+        { url: 'https://example.com/', title: '(2) Exemplo', visitTime: now - 1000 },
+        { url: 'https://example.com/', visitTime: now - 10 * DAY_MS },
+        { url: 'chrome://extensions/', visitTime: now - 500 }
+      ]
+    });
+    const startTime = now - DAY_MS;
+
+    const records = await collectVisits(await fetchHistoryItems(startTime, always), startTime, always);
+
+    expect(records).toEqual([
+      { rawUrl: 'https://example.com/', title: 'Exemplo', lastVisitTime: now - 1000, visitTimes: [now - 1000] }
+    ]);
+  });
+
+  it('para e devolve null quando o carregamento foi substituído', async () => {
+    installFakeChrome({ visits: [{ url: 'https://example.com/', visitTime: now - 1000 }] });
+    const items = await fetchHistoryItems(now - DAY_MS, always);
+    expect(await collectVisits(items, now - DAY_MS, () => false)).toBeNull();
+  });
+});
+
 describe('buildHistoryEntries', () => {
+  it('ignora as visitas guardadas que saíram do período', () => {
+    const records = [
+      { rawUrl: 'https://a.com/', title: 'A', lastVisitTime: now - 1000, visitTimes: [now - 1000, now - 2 * DAY_MS] },
+      { rawUrl: 'https://b.com/', title: 'B', lastVisitTime: now - 3 * DAY_MS, visitTimes: [now - 3 * DAY_MS] }
+    ];
+
+    const entries = buildHistoryEntries(records, now - DAY_MS);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ rawUrl: 'https://a.com/', visits: 1 });
+  });
+
   it('conta só as visitas dentro do período', async () => {
     installFakeChrome({
       visits: [
@@ -38,7 +83,7 @@ describe('buildHistoryEntries', () => {
       ]
     });
 
-    const [entry] = await buildHistoryEntries(DAY_MS, always);
+    const [entry] = await loadEntries(DAY_MS);
 
     expect(entry).toMatchObject({ rawUrl: 'https://example.com/', title: 'Exemplo', visits: 2 });
     expect(entry.url).toBeInstanceOf(URL);
@@ -54,7 +99,7 @@ describe('buildHistoryEntries', () => {
       ]
     });
 
-    const entries = await buildHistoryEntries(DAY_MS, always);
+    const entries = await loadEntries(DAY_MS);
     expect(entries.map(e => e.rawUrl)).toEqual(['https://recente.com/', 'https://antigo.com/']);
   });
 
@@ -63,7 +108,7 @@ describe('buildHistoryEntries', () => {
       visits: [{ url: 'https://wiki.com/P%C3%A1gina?q=ignorada', title: 'Configuração', visitTime: now - 1000 }]
     });
 
-    const [entry] = await buildHistoryEntries(DAY_MS, always);
+    const [entry] = await loadEntries(DAY_MS);
     expect(entry.searchText).toBe('wiki.com/pagina\nconfiguracao');
   });
 });

@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Custom Dynamic Dashboard",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Dashboard para a página inicial com repositórios Git e domínios mais acessados no período escolhido.",
   "permissions": [
     "favicon",
     "history",
-    "storage"
+    "storage",
+    "unlimitedStorage"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"
@@ -16,7 +17,8 @@
     "open_in_tab": true
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "commands": {
     "open-search": {

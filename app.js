@@ -4,6 +4,7 @@ import {
 } from './lib/constants.js';
 import { toGitHost } from './lib/forges.js';
 import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
+import { readHistoryCache, updateHistoryCache, writeHistoryCache } from './lib/history-cache.js';
 import {
   createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups,
   watchSyncedSettings, writeHiddenItems, writeHistoryPeriod
@@ -106,7 +107,7 @@ function saveHistoryPeriod(id) {
 // --- Carregamento do Histórico ---
 
 // Invalida o carregamento em andamento e mostra o estado de carregamento.
-// Sem cache nesse intervalo, para que busca ou configurações não redesenhem dados de outro período
+// Sem entradas em memória nesse intervalo, para que busca ou configurações não redesenhem dados de outro período
 function startHistoryLoading() {
   historyEntries = null;
   updateUrlGroupsVisibility();
@@ -116,26 +117,42 @@ function startHistoryLoading() {
   return ++historyLoadId;
 }
 
+// now, e não o updatedAt do cache: o cache pode cobrir um período maior ou ser de horas atrás
+function showHistory(cache, period, now) {
+  historyEntries = buildHistoryEntries(cache.records, now - period.ms);
+  hostIconPages = buildHostIconPages(historyEntries);
+  renderDashboard();
+}
+
+// O cache aparece na hora e é atualizado em seguida; só as URLs visitadas desde a última
+// atualização voltam a consultar o histórico
 async function loadHistory() {
   const loadId = startHistoryLoading();
   const isCurrent = () => loadId === historyLoadId;
+  const period = currentPeriod;
+  const startedAt = Date.now();
 
-  let entries;
+  const cached = await readHistoryCache(period, startedAt);
+  if (!isCurrent()) return;
+  if (cached) showHistory(cached, period, startedAt);
+
+  let updated;
   try {
-    entries = await buildHistoryEntries(currentPeriod.ms, isCurrent);
+    updated = await updateHistoryCache(cached, period, isCurrent, startedAt);
   } catch (e) {
-    if (loadId !== historyLoadId) return;
+    if (!isCurrent()) return;
     console.error('Falha ao carregar histórico:', e);
+    if (cached) return;
     renderMessage(document.getElementById('url-groups'), 'Erro ao carregar o histórico.');
     renderMessage(document.getElementById('git-repos'), 'Erro ao carregar o histórico.');
     renderMessage(document.getElementById('top-domains'), 'Erro ao carregar o histórico.');
     return;
   }
 
-  if (loadId !== historyLoadId) return;
-  historyEntries = entries;
-  hostIconPages = buildHostIconPages(entries);
-  renderDashboard();
+  if (!isCurrent() || !updated?.changed) return;
+  showHistory(updated.cache, period, startedAt);
+  // Falha ao gravar só faz a próxima aba refazer o trabalho
+  writeHistoryCache(updated.cache, startedAt).catch(e => console.error('Falha ao gravar o cache do histórico:', e));
 }
 
 // --- Renderização na Interface ---
@@ -151,14 +168,18 @@ function renderDashboard({ recategorize = true } = {}) {
     });
   }
   const { userGroups, projectGroups, domainCounts } = lastCategorized;
+  // A atualização do cache e as mudanças de configuração redesenham os cards; o foco volta ao mesmo item
+  const focusedKey = document.activeElement?.closest?.('.item-card')?.dataset.key;
   renderUrlGroups(userGroups);
   renderCategorizedRepos(projectGroups);
   renderTopDomains(domainCounts);
+  if (focusedKey) document.querySelector(`.item-card[data-key="${CSS.escape(focusedKey)}"]`)?.focus();
 }
 
 function createItemCard({ key, name, url, count, lastVisitTime, title, iconPageUrl }) {
   const a = document.createElement('a');
   a.className = 'item-card';
+  a.dataset.key = key;
   a.href = url;
 
   const mainEl = document.createElement('span');

@@ -1,7 +1,8 @@
 // Substitutos mínimos das APIs chrome.* usadas em lib/, instalados em globalThis.chrome
 
-export function createFakeChrome({ storage = {}, visits = [] } = {}) {
-  const data = structuredClone(storage);
+function createStore(area, initial, listeners) {
+  const data = structuredClone(initial);
+  const emit = changes => listeners.forEach(listener => listener(changes, area));
   const store = {
     data,
     failNextSet: null,
@@ -19,10 +20,18 @@ export function createFakeChrome({ storage = {}, visits = [] } = {}) {
         throw error;
       }
       Object.assign(data, structuredClone(items));
-      const changes = Object.fromEntries(Object.keys(items).map(key => [key, { newValue: structuredClone(items[key]) }]));
-      for (const listener of listeners) listener(changes, 'sync');
+      emit(Object.fromEntries(Object.keys(items).map(key => [key, { newValue: structuredClone(items[key]) }])));
+    },
+    async remove(keys) {
+      const removed = [keys].flat().filter(key => Object.hasOwn(data, key));
+      removed.forEach(key => delete data[key]);
+      if (removed.length > 0) emit(Object.fromEntries(removed.map(key => [key, {}])));
     }
   };
+  return store;
+}
+
+export function createFakeChrome({ storage = {}, local = {}, visits = [] } = {}) {
   const listeners = [];
   const onChanged = {
     addListener: listener => listeners.push(listener),
@@ -31,34 +40,42 @@ export function createFakeChrome({ storage = {}, visits = [] } = {}) {
   };
 
   // visits: [{ url, title, visitTime }]; cada URL vira um item com o horário da visita mais recente,
-  // como no chrome.history.search
-  const items = new Map();
-  for (const visit of visits) {
-    const item = items.get(visit.url);
-    if (!item) {
-      items.set(visit.url, { id: String(items.size + 1), url: visit.url, title: visit.title ?? '', lastVisitTime: visit.visitTime });
-    } else if (visit.visitTime > item.lastVisitTime) {
-      item.lastVisitTime = visit.visitTime;
-      if (visit.title !== undefined) item.title = visit.title;
+  // como no chrome.history.search. history.visits pode ganhar visitas depois, como numa navegação
+  function historyItems() {
+    const items = new Map();
+    for (const visit of history.visits) {
+      const item = items.get(visit.url);
+      if (!item) {
+        items.set(visit.url, { id: String(items.size + 1), url: visit.url, title: visit.title ?? '', lastVisitTime: visit.visitTime });
+      } else if (visit.visitTime > item.lastVisitTime) {
+        item.lastVisitTime = visit.visitTime;
+        if (visit.title !== undefined) item.title = visit.title;
+      }
     }
+    return [...items.values()];
   }
 
   const history = {
+    visits: [...visits],
     searchCalls: [],
+    getVisitsCalls: [],
     async search({ startTime = 0, endTime = Infinity, maxResults = 100 }) {
       history.searchCalls.push({ startTime, endTime, maxResults });
-      return [...items.values()]
+      return historyItems()
         .filter(item => item.lastVisitTime >= startTime && item.lastVisitTime < endTime)
         .sort((a, b) => b.lastVisitTime - a.lastVisitTime)
-        .slice(0, maxResults)
-        .map(item => ({ ...item }));
+        .slice(0, maxResults);
     },
     async getVisits({ url }) {
-      return visits.filter(v => v.url === url).map(v => ({ visitTime: v.visitTime }));
+      history.getVisitsCalls.push(url);
+      return history.visits.filter(v => v.url === url).map(v => ({ visitTime: v.visitTime }));
     }
   };
 
-  return { storage: { sync: store, onChanged }, history };
+  return {
+    storage: { sync: createStore('sync', storage, listeners), local: createStore('local', local, listeners), onChanged },
+    history
+  };
 }
 
 export function installFakeChrome(options) {

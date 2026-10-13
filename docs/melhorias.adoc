@@ -10,7 +10,7 @@ toc::[]
 
 == Ordem recomendada
 
-. Cache do resultado processado, com o progresso do primeiro carregamento (<<cache>>, <<progresso>>).
+. Progresso da carga completa, que ainda percorre todo o histórico (<<progresso>>).
 . Busca que encontra uma página interna, com destaque dos termos (<<pagina-interna>>, <<destacar>>).
 . Ordenar por recência ou "frecency" (<<frecency>>).
 . Na página de configurações (`options.html`), desfazer remoções, restaurar os hosts Git padrão e exportar/importar (<<desfazer>>, <<hosts-padrao>>, <<exportar>>).
@@ -57,7 +57,7 @@ Realçar os termos da busca no nome e no título dos cards.
 [[progresso]]
 === Mostrar o progresso do carregamento
 
-Hoje aparece só "Carregando…", mas no período de 3 meses o carregamento faz milhares de chamadas a `chrome.history.getVisits`.
+Na carga completa sem cache (a primeira, ao escolher um período maior ou depois de apagar todo o histórico), aparece só "Carregando…", mas no período de 3 meses o carregamento faz milhares de chamadas a `chrome.history.getVisits`.
 Algo como "Carregando… 1.200 de 4.800 páginas" já ajudaria.
 
 [[desfazer]]
@@ -137,16 +137,3 @@ Proposta:
 * a cada push e pull request, `npm ci` e `npm test`;
 * build: gerar o `.zip` da extensão com o mesmo script da publicação (<<chrome-web-store>>), conferindo que a versão do `manifest.json` bate com a tag;
 * a cada tag `v*`, criar o release no GitHub com o `.zip` anexado e enviar o pacote à Chrome Web Store pela API da loja, com as credenciais OAuth guardadas nos secrets do repositório.
-
-== Desempenho
-
-[[cache]]
-=== Cache do resultado processado
-
-Cada nova aba refaz `chrome.history.search` e uma chamada a `getVisits` por URL.
-
-Proposta:
-
-* guardar o resultado em `chrome.storage.session` ou `chrome.storage.local`, com um carimbo de tempo;
-* mostrar o cache na hora e atualizar em segundo plano;
-* opcionalmente, usar `chrome.history.onVisited` no service worker para manter as contagens de forma incremental.

@@ -12,6 +12,8 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Agrupa repositórios por Organização / Workspace / Subgrupo.
 - **Domínios Mais Acessados:**
   - Extrai e consolida o host raiz dos seus sites mais frequentados no período, evitando poluição de URLs específicas.
+- **Abertura Instantânea:**
+  - O resultado processado fica guardado localmente (`chrome.storage.local`), e cada nova aba o mostra na hora; em seguida, o painel consulta só as páginas visitadas desde a abertura anterior e se atualiza, sem tirar o foco do card em que você está. O mesmo cache serve a todos os períodos até o maior já carregado. A carga completa só acontece na primeira vez, ao escolher um período maior, depois de apagar todo o histórico e uma vez por dia, em segundo plano. Páginas apagadas do histórico saem do cache na hora.
 - **Contador de Visitas:**
   - O número em cada card é o total de visitas no período; passe o mouse sobre o card para ver também o último acesso ("12 visitas no último mês · último acesso há 2 horas"). Leitores de tela anunciam o mesmo texto.
 - **Layout Responsivo:**
@@ -53,11 +55,12 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 │   ├── text.js         # Normalização de hosts, títulos, busca e URLs
 │   ├── forges.js       # Regras de cada forja Git (GitHub, GitLab, Bitbucket…)
 │   ├── history.js      # Leitura do histórico e contagem de visitas no período
+│   ├── history-cache.js # Cache do histórico processado e atualização incremental
 │   ├── categorize.js   # Agregação em repositórios, domínios e agrupamentos
 │   ├── groups.js       # Edição e reordenação dos agrupamentos
 │   └── storage.js      # Leitura e gravação das configurações
 ├── tests/              # Testes unitários (Vitest)
-├── background.js       # Atalho Alt+T que abre o painel com foco na busca
+├── background.js       # Atalho Alt+T e remoção do cache das páginas apagadas do histórico
 ├── theme.css           # Cores geradas pelo matugen (opcional, não versionado)
 └── README.md           # Documentação
 ```
