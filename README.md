@@ -24,16 +24,17 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Escolha a janela do histórico no topo do painel: 24 horas, 1 semana, 1 mês (padrão), 3 meses, 6 meses ou 1 ano. A escolha é lembrada e sincronizada via `chrome.storage.sync`.
   - O Chrome costuma guardar só os últimos ~90 dias de histórico; por isso 6 meses e 1 ano normalmente mostram o mesmo que 3 meses.
 - **Busca Instantânea:**
-  - Filtra repositórios, domínios e agrupamentos enquanto você digita, pela URL ou pelo título das páginas visitadas (sem diferenciar maiúsculas nem acentos; `Esc` limpa).
+  - Filtra repositórios, domínios e agrupamentos enquanto você digita, pela URL ou pelo título das páginas visitadas (sem diferenciar maiúsculas nem acentos; `Esc` limpa). Os termos encontrados aparecem destacados no nome e no título dos cards.
+  - Opcionalmente (em **Configurações** → **Busca**, desativado por padrão), quando a busca casa com uma página interna (um PR, uma issue, um artigo) e não com o próprio repositório ou domínio, até 3 dessas páginas aparecem logo abaixo do card, as mais visitadas primeiro, com link direto.
   - Como o Chrome dá o foco da nova aba à barra de endereço, use `Shift+F6` para ir à busca, `/` quando a página já tem o foco, ou `Alt+T` para abrir o painel com o cursor já na busca (o atalho pode ser trocado em `chrome://extensions/shortcuts`).
-  - Funciona como lançador: `Enter` abre o primeiro resultado, `Ctrl+Enter` o abre em segundo plano e `↑`/`↓` percorrem os cards.
+  - Funciona como lançador: `Enter` abre o primeiro resultado (a primeira página encontrada, se o card mostrar alguma), `Ctrl+Enter` o abre em segundo plano e `↑`/`↓` percorrem os cards e as páginas.
 - **Ocultar Itens:**
   - O `×` que aparece no canto de cada card (ao passar o mouse ou chegar nele com `Tab`) tira o repositório ou domínio do painel, inclusive da busca — útil para buscadores, webmail e páginas de login.
   - O botão **⊘ Ocultos**, que só aparece quando há itens ocultos, abre as configurações (ou a aba delas já aberta) direto na lista do que foi escondido, onde é possível mostrar de novo. A lista é sincronizada via `chrome.storage.sync`.
 - **Favicons:**
   - Cada repositório, domínio e host Git mostra o ícone do site, lido do cache local de favicons do Chrome (permissão `favicon`), sem nenhuma requisição externa — funciona também com hosts internos. Sites sem ícone em cache aparecem com o globo padrão.
 - **Configurações:**
-  - Uma página única, aberta pelo botão **⚙ Configurações** do painel ou em `chrome://extensions` → **Detalhes** → **Opções da extensão**, com três seções: hosts Git, agrupamentos e itens ocultos.
+  - Uma página única, aberta pelo botão **⚙ Configurações** do painel ou em `chrome://extensions` → **Detalhes** → **Opções da extensão**, com quatro seções: hosts Git, agrupamentos, itens ocultos e busca.
   - **Hosts Git:** adicione e remova instâncias personalizadas, escolhendo o tipo de forja, sem editar código.
   - **Agrupamentos:** junte domínios e repositórios sob um título pelo trecho do endereço. Os agrupamentos podem ser editados (✎, `Esc` cancela) e reordenados (↑/↓); a ordem importa, porque quem casa com mais de um agrupamento fica no primeiro da lista.
   - Sincronização via `chrome.storage.sync`; os painéis abertos se atualizam na hora, sem recarregar o histórico.
@@ -134,9 +135,9 @@ As cores do painel podem acompanhar o papel de parede via [matugen](https://gith
 | `Shift+F6` | Leva o foco da barra de endereço para a busca do painel (o `F6` também funciona, mas passa antes pela faixa de abas). |
 | `/` | Foca a busca de qualquer ponto da página. |
 | `Esc` | Limpa a busca. |
-| `Enter` (na busca) | Abre o primeiro resultado, se houver algo digitado. |
+| `Enter` (na busca) | Abre o primeiro resultado, se houver algo digitado; se o primeiro card mostrar páginas encontradas, abre a primeira delas. |
 | `Ctrl+Enter` | Abre o primeiro resultado (ou o card focado) numa aba em segundo plano. |
-| `↑` / `↓` | Percorrem os cards e os botões "Mostrar mais" a partir da busca; `↑` no primeiro card volta para a busca. |
+| `↑` / `↓` | Percorrem os cards, as páginas encontradas abaixo deles e os botões "Mostrar mais" a partir da busca; `↑` no primeiro card volta para a busca. |
 | `Alt+T` | Abre o painel numa nova aba com o cursor já na busca. |
 
 ### O `Alt+T` não funciona

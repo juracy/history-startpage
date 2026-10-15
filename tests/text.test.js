@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cleanTitle, normalizeHost, normalizePattern, parseSearchTerms, parseWebUrl, safeDecode, splitItemKey, stripRepoTitle, formatTimeAgo
+  cleanTitle, findHighlightRanges, normalizeHost, normalizePattern, parseSearchTerms, parseWebUrl, safeDecode, splitItemKey, stripRepoTitle, formatTimeAgo
 } from '../lib/text.js';
 
 describe('normalizeHost', () => {
@@ -96,5 +96,27 @@ describe('formatTimeAgo', () => {
     [now + 5 * MIN, 'agora há pouco']
   ])('%j → %j', (time, expected) => {
     expect(formatTimeAgo(time, now)).toBe(expected);
+  });
+});
+
+describe('findHighlightRanges', () => {
+  it('marca os termos no texto original, ignorando acentos e maiúsculas', () => {
+    const text = 'Configuração do CI';
+    const ranges = findHighlightRanges(text, parseSearchTerms('configuracao ci'));
+    expect(ranges.map(([start, end]) => text.slice(start, end))).toEqual(['Configuração', 'CI']);
+  });
+
+  it('marca todas as ocorrências e junta as sobrepostas', () => {
+    expect(findHighlightRanges('abc-abc', ['ab', 'bc'])).toEqual([[0, 3], [4, 7]]);
+  });
+
+  it('mantém juntos a letra e o acento já decomposto', () => {
+    const text = 'cafe\u0301 forte';
+    const [[start, end]] = findHighlightRanges(text, ['cafe']);
+    expect(text.slice(start, end)).toBe('cafe\u0301');
+  });
+
+  it('não marca nada sem termos', () => {
+    expect(findHighlightRanges('texto', [])).toEqual([]);
   });
 });

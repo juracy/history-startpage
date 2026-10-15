@@ -10,7 +10,6 @@ toc::[]
 
 == Ordem recomendada
 
-. Busca que encontra uma página interna, com destaque dos termos (<<pagina-interna>>, <<destacar>>).
 . Ordenar por recência ou "frecency" (<<frecency>>).
 . Na página de configurações (`options.html`), desfazer remoções, restaurar os hosts Git padrão e exportar/importar (<<desfazer>>, <<hosts-padrao>>, <<exportar>>).
 . Fixar favoritos e tema claro (<<favoritos>>, <<tema-claro>>).
@@ -21,12 +20,6 @@ toc::[]
 === Fixar favoritos
 
 Itens fixados que apareceriam sempre, independentemente do histórico do período.
-
-[[pagina-interna]]
-=== Busca que encontra uma página interna
-
-Se a busca casa com uma página interna (um PR, por exemplo), o card leva à raiz do repositório.
-Seria melhor mostrar as páginas que casaram como sublinks do card, ou ter uma seção "Páginas" durante a busca.
 
 [[frecency]]
 === Ordenar por recência ou "frecency"
@@ -47,11 +40,6 @@ Também vale tratar o limite de 8 KB por item do `chrome.storage.sync` (`QUOTA_B
 Se o usuário remover `github.com` ou `gitlab.com`, hoje só consegue recolocá-los digitando.
 
 == Usabilidade
-
-[[destacar]]
-=== Destacar os termos encontrados
-
-Realçar os termos da busca no nome e no título dos cards.
 
 [[desfazer]]
 === Desfazer remoções

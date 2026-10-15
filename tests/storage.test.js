@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups,
-  watchSyncedSettings, writeGitHosts, writeHiddenItems
+  createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readShowMatchedPages,
+  readUrlGroups, watchSyncedSettings, writeGitHosts, writeHiddenItems, writeShowMatchedPages
 } from '../lib/storage.js';
 import { installFakeChrome } from './fake-chrome.js';
 
@@ -108,6 +108,23 @@ describe('readHistoryPeriod', () => {
 
     installFakeChrome({ storage: { historyPeriod: '2d' } });
     expect((await readHistoryPeriod()).id).toBe('30d');
+  });
+});
+
+describe('readShowMatchedPages', () => {
+  it('fica desativado por padrão e só aceita true', async () => {
+    installFakeChrome();
+    expect(await readShowMatchedPages()).toBe(false);
+
+    installFakeChrome({ storage: { showMatchedPages: 'sim' } });
+    expect(await readShowMatchedPages()).toBe(false);
+  });
+
+  it('lê o que foi gravado', async () => {
+    const chrome = installFakeChrome();
+    await writeShowMatchedPages(true);
+    expect(chrome.storage.sync.data).toEqual({ showMatchedPages: true });
+    expect(await readShowMatchedPages()).toBe(true);
   });
 });
 

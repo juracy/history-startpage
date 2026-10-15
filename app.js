@@ -6,10 +6,10 @@ import { toGitHost } from './lib/forges.js';
 import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
 import { readHistoryCache, updateHistoryCache, writeHistoryCache } from './lib/history-cache.js';
 import {
-  createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readUrlGroups,
-  watchSyncedSettings, writeHiddenItems, writeHistoryPeriod
+  createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readShowMatchedPages,
+  readUrlGroups, watchSyncedSettings, writeHiddenItems, writeHistoryPeriod
 } from './lib/storage.js';
-import { formatTimeAgo, parseSearchTerms } from './lib/text.js';
+import { findHighlightRanges, formatTimeAgo, parseSearchTerms } from './lib/text.js';
 import { createFavicon, renderMessage, showError } from './dom.js';
 
 const SEARCH_DEBOUNCE_MS = 200;
@@ -41,6 +41,9 @@ let hostIconPages = new Map();
 // Termos da busca já normalizados; vazio = sem filtro
 let searchTerms = [];
 
+// Mostra abaixo do card as páginas internas encontradas pela busca (opção das configurações)
+let showMatchedPages = false;
+
 // Listas abertas pelo "Mostrar mais" (ids como "domains" ou "repos:<grupo>"); zerado ao trocar o período
 const expandedLists = new Set();
 
@@ -65,6 +68,15 @@ const urlGroupsSetting = createSyncedSetting({
   keys: ['urlGroups'], read: readUrlGroups, enqueue: enqueueSave,
   onChange: (groups) => {
     currentUrlGroups = groups;
+    renderDashboard();
+  }
+});
+
+// Desligada, a categorização nem junta as páginas encontradas; por isso a troca recategoriza
+const showMatchedPagesSetting = createSyncedSetting({
+  keys: ['showMatchedPages'], read: readShowMatchedPages, enqueue: enqueueSave,
+  onChange: (enabled) => {
+    showMatchedPages = enabled;
     renderDashboard();
   }
 });
@@ -180,19 +192,62 @@ function renderDashboard({ recategorize = true } = {}) {
   if (recategorize || !lastCategorized) {
     lastCategorized = categorizeHistory(historyEntries, {
       gitHosts: currentGitHosts, urlGroups: currentUrlGroups, searchTerms, hostIconPages,
-      hiddenKeys: new Set(hiddenItems)
+      hiddenKeys: new Set(hiddenItems), collectPages: showMatchedPages
     });
   }
   const { userGroups, projectGroups, domainCounts } = lastCategorized;
   // A atualização do cache e as mudanças de configuração redesenham os cards; o foco volta ao mesmo item
-  const focusedKey = document.activeElement?.closest?.('.item-card')?.dataset.key;
+  const focusedKey = document.activeElement?.closest?.('.item-card, .item-page')?.dataset.key;
   renderUrlGroups(userGroups);
   renderCategorizedRepos(projectGroups);
   renderTopDomains(domainCounts);
-  if (focusedKey) document.querySelector(`.item-card[data-key="${CSS.escape(focusedKey)}"]`)?.focus();
+  if (focusedKey) document.querySelector(`[data-key="${CSS.escape(focusedKey)}"]`)?.focus();
 }
 
-function createItemCard({ key, name, url, count, lastVisitTime, title, iconPageUrl }) {
+// Texto com os termos da busca em <mark>; os pedaços entram como nós de texto, nunca como HTML
+function setHighlightedText(el, text) {
+  let last = 0;
+  for (const [start, end] of findHighlightRanges(text, searchTerms)) {
+    if (start > last) el.append(text.slice(last, start));
+    const mark = document.createElement('mark');
+    mark.textContent = text.slice(start, end);
+    el.append(mark);
+    last = end;
+  }
+  el.append(text.slice(last));
+}
+
+function formatVisits(count) {
+  return `${count.toLocaleString('pt-BR')} ${count === 1 ? 'visita' : 'visitas'} ${currentPeriod.phrase}`;
+}
+
+// Páginas internas que casaram com a busca, quando o card sozinho não explica o resultado
+function createPageLinks(pages) {
+  const list = document.createElement('div');
+  list.className = 'item-pages';
+  list.append(...pages.map(({ url, title, visits }) => {
+    const a = document.createElement('a');
+    a.className = 'item-page';
+    a.dataset.key = `page:${url}`;
+    a.href = url;
+    a.title = `${title}\n${url}`;
+    a.setAttribute('aria-label', `${title}, ${formatVisits(visits)}`);
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'item-page-title';
+    setHighlightedText(titleEl, title);
+
+    const countEl = document.createElement('span');
+    countEl.className = 'item-page-count';
+    countEl.textContent = visits.toLocaleString('pt-BR');
+
+    a.append(titleEl, countEl);
+    return a;
+  }));
+  return list;
+}
+
+function createItemCard({ key, name, url, count, lastVisitTime, title, iconPageUrl, pages }) {
   const a = document.createElement('a');
   a.className = 'item-card';
   a.dataset.key = key;
@@ -206,13 +261,13 @@ function createItemCard({ key, name, url, count, lastVisitTime, title, iconPageU
 
   const nameEl = document.createElement('span');
   nameEl.className = 'item-name';
-  nameEl.textContent = name;
+  setHighlightedText(nameEl, name);
   textEl.appendChild(nameEl);
 
   if (title) {
     const titleEl = document.createElement('span');
     titleEl.className = 'item-title';
-    titleEl.textContent = title;
+    setHighlightedText(titleEl, title);
     textEl.appendChild(titleEl);
   }
 
@@ -227,7 +282,7 @@ function createItemCard({ key, name, url, count, lastVisitTime, title, iconPageU
   // são refeitos ao passar o mouse ou focar. O rótulo evita que o leitor de tela anuncie
   // só o número solto ao final do nome
   const updateLabels = () => {
-    const visits = `${count.toLocaleString('pt-BR')} ${count === 1 ? 'visita' : 'visitas'} ${currentPeriod.phrase}`;
+    const visits = formatVisits(count);
     const visitsText = lastVisitTime ? `${visits} · último acesso ${formatTimeAgo(lastVisitTime)}` : visits;
     a.title = [title, url, visitsText].filter(Boolean).join('\n');
     a.setAttribute('aria-label', [name, title, visitsText].filter(Boolean).join(', '));
@@ -247,6 +302,7 @@ function createItemCard({ key, name, url, count, lastVisitTime, title, iconPageU
   const row = document.createElement('div');
   row.className = 'item-row';
   row.append(a, hideBtn);
+  if (pages.length > 0) row.append(createPageLinks(pages));
   return row;
 }
 
@@ -444,19 +500,21 @@ function getResultCards() {
   return Array.from(document.querySelectorAll('.container .item-card'));
 }
 
-// O que as setas percorrem: os cards e os botões "Mostrar mais" entre eles
+// O que as setas percorrem: os cards, as páginas encontradas abaixo deles e os botões "Mostrar mais"
+const NAVIGABLE_SELECTOR = '.item-card, .item-page, .list-toggle';
+
 function getNavigableItems() {
-  return Array.from(document.querySelectorAll('.container .item-card, .container .list-toggle'));
+  return Array.from(document.querySelector('.container').querySelectorAll(NAVIGABLE_SELECTOR));
 }
 
-// ↑/↓ percorrem os cards e os botões "Mostrar mais"; ↑ no primeiro volta para a busca. Enter e Ctrl+Enter num card
-// focado já são tratados pelo próprio link
+// ↑/↓ percorrem os cards, as páginas encontradas e os botões "Mostrar mais"; ↑ no primeiro volta para a busca.
+// Enter e Ctrl+Enter num card focado já são tratados pelo próprio link
 function setupResultsNavigation(input) {
   document.querySelector('.container').addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
 
-    const card = e.target.closest('.item-card, .list-toggle');
+    const card = e.target.closest(NAVIGABLE_SELECTOR);
     if (!card) return;
 
     const cards = getNavigableItems();
@@ -501,8 +559,10 @@ function setupSearch() {
       apply();
       // Sem busca, um Enter por reflexo (logo após o Alt+T, por exemplo) não deve navegar
       if (searchTerms.length === 0) return;
-      const first = getResultCards()[0];
-      if (!first) return;
+      const card = getResultCards()[0];
+      if (!card) return;
+      // Se o card só aparece por causa de uma página interna, é ela que o usuário procura
+      const first = card.parentElement.querySelector('.item-page') || card;
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
         // Página da extensão pode criar abas sem a permissão "tabs"
@@ -557,7 +617,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSearch();
   setupSettingsButtons();
   // O período fica de fora: trocá-lo em outra aba não deve recarregar o histórico desta
-  const settings = [gitHostsSetting, urlGroupsSetting, hiddenItemsSetting];
+  const settings = [gitHostsSetting, urlGroupsSetting, hiddenItemsSetting, showMatchedPagesSetting];
   watchSyncedSettings(settings);
   await Promise.all([...settings.map(setting => setting.refresh()), loadHistoryPeriod()]);
   setupPeriodSelect();

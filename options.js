@@ -2,8 +2,8 @@ import { DEFAULT_FORGE, GIT_FORGES, findKnownForge, upsertGitHost } from './lib/
 import { moveGroup, updateGroup } from './lib/groups.js';
 import { fetchHostIconPages } from './lib/history.js';
 import {
-  createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readUrlGroups, watchSyncedSettings,
-  writeGitHosts, writeHiddenItems, writeUrlGroups
+  createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readShowMatchedPages, readUrlGroups,
+  watchSyncedSettings, writeGitHosts, writeHiddenItems, writeShowMatchedPages, writeUrlGroups
 } from './lib/storage.js';
 import { normalizeHost, normalizePattern, safeDecode, splitItemKey } from './lib/text.js';
 import { createFavicon, hostIconPage, renderMessage, showError } from './dom.js';
@@ -53,6 +53,13 @@ const hiddenItemsSetting = createSyncedSetting({
   }
 });
 
+const showMatchedPagesSetting = createSyncedSetting({
+  keys: ['showMatchedPages'], read: readShowMatchedPages, write: writeShowMatchedPages, enqueue: enqueueSave,
+  onChange: (enabled) => {
+    document.getElementById('show-matched-pages').checked = enabled;
+  }
+});
+
 // O erro de gravação aparece na própria seção; devolve se a gravação deu certo
 async function saveSetting(setting, errorId, label, update) {
   try {
@@ -69,6 +76,7 @@ async function saveSetting(setting, errorId, label, update) {
 const saveGitHosts = update => saveSetting(gitHostsSetting, 'hosts-error', 'hosts Git', update);
 const saveUrlGroups = update => saveSetting(urlGroupsSetting, 'groups-error', 'agrupamentos', update);
 const saveHiddenItems = update => saveSetting(hiddenItemsSetting, 'hidden-error', 'itens ocultos', update);
+const saveShowMatchedPages = update => saveSetting(showMatchedPagesSetting, 'search-error', 'a opção de busca', update);
 
 // --- Renderização ---
 
@@ -329,6 +337,15 @@ function setupUrlGroups() {
   onEnter(patternInput, handleAdd);
 }
 
+// Se a gravação falhar, a caixa volta ao valor gravado
+function setupSearchOptions() {
+  const checkbox = document.getElementById('show-matched-pages');
+  checkbox.addEventListener('change', async () => {
+    const enabled = checkbox.checked;
+    if (!await saveShowMatchedPages(() => enabled)) checkbox.checked = !enabled;
+  });
+}
+
 // --- Navegação entre seções ---
 
 // Rola até a seção e foca o primeiro controle dela
@@ -365,7 +382,8 @@ async function setupSectionRequests() {
 document.addEventListener('DOMContentLoaded', async () => {
   setupGitHosts();
   setupUrlGroups();
-  const settings = [gitHostsSetting, urlGroupsSetting, hiddenItemsSetting];
+  setupSearchOptions();
+  const settings = [gitHostsSetting, urlGroupsSetting, hiddenItemsSetting, showMatchedPagesSetting];
   watchSyncedSettings(settings);
   // Os ícones vêm antes das listas, para não desenhá-las duas vezes; sem eles, vale o globo padrão
   hostIconPages = await fetchHostIconPages().catch((e) => {

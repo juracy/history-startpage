@@ -142,7 +142,8 @@
       opacity: 0;
       transition: opacity 0.15s;
     }
-    .item-row:hover .item-hide, .item-hide:focus-visible {
+    /* Só o card, e não as páginas encontradas abaixo dele, mostra o ×: ele oculta o item inteiro */
+    .item-card:hover + .item-hide, .item-hide:hover, .item-hide:focus-visible {
       opacity: 1;
     }
     .item-hide:hover, .item-hide:focus-visible {
@@ -182,6 +183,50 @@
       padding: 0.2rem 0.5rem;
       border-radius: 4px;
       flex-shrink: 0;
+    }
+    .item-name mark, .item-title mark, .item-page-title mark {
+      background: color-mix(in srgb, var(--accent) 35%, transparent);
+      color: inherit;
+      border-radius: 2px;
+    }
+    /* Páginas encontradas pela busca, alinhadas ao texto do card (ícone de 32px + espaço) */
+    .item-pages {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      margin: 0.2rem 0 0.1rem calc(0.9rem + 32px + 0.75rem - 0.5rem);
+    }
+    .item-page {
+      display: flex;
+      gap: 0.4rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+    .item-page::before {
+      content: '↳';
+      flex-shrink: 0;
+    }
+    .item-page:hover, .item-page:focus-visible {
+      background: var(--card-hover);
+      color: var(--text);
+    }
+    .item-page:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .item-page-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .item-page-count {
+      flex-shrink: 0;
+      margin-left: 0.6rem;
     }
     .list-toggle {
       align-self: flex-start;

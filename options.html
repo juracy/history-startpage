@@ -43,6 +43,18 @@
     .help {
       margin-top: 0;
     }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+    .checkbox-row input {
+      width: 1rem;
+      height: 1rem;
+      margin: 0;
+      accent-color: var(--accent);
+    }
 
     @media (max-width: 760px) {
       body {
@@ -63,6 +75,7 @@
       <a class="btn" href="#hosts">Hosts Git</a>
       <a class="btn" href="#agrupamentos">Agrupamentos</a>
       <a class="btn" href="#ocultos">Itens ocultos</a>
+      <a class="btn" href="#busca">Busca</a>
     </nav>
 
     <section id="hosts" aria-labelledby="hosts-title">
@@ -110,6 +123,20 @@
       <p id="hidden-error" class="error-msg" role="alert" hidden></p>
 
       <div id="registered-hidden" class="tag-list"></div>
+    </section>
+
+    <section id="busca" aria-labelledby="search-title">
+      <h2 id="search-title">Busca</h2>
+      <p class="help">
+        Quando a busca encontra uma página interna (um PR, uma issue, um artigo) e não o próprio repositório ou domínio,
+        o card leva à raiz. Com a opção abaixo, até 3 dessas páginas aparecem logo abaixo do card, com link direto.
+      </p>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="show-matched-pages" />
+        Mostrar as páginas encontradas abaixo do card
+      </label>
+      <p id="search-error" class="error-msg" role="alert" hidden></p>
     </section>
   </div>
 

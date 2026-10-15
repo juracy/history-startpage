@@ -11,8 +11,8 @@ function entry(rawUrl, visits, title = '', lastVisitTime = 0) {
   };
 }
 
-function categorize(entries, { gitHosts = [{ host: 'github.com', forge: 'github' }], urlGroups = [], search = '', hostIconPages = new Map(), hidden = [] } = {}) {
-  return categorizeHistory(entries, { gitHosts, urlGroups, searchTerms: parseSearchTerms(search), hostIconPages, hiddenKeys: new Set(hidden) });
+function categorize(entries, { gitHosts = [{ host: 'github.com', forge: 'github' }], urlGroups = [], search = '', hostIconPages = new Map(), hidden = [], collectPages = false } = {}) {
+  return categorizeHistory(entries, { gitHosts, urlGroups, searchTerms: parseSearchTerms(search), hostIconPages, hiddenKeys: new Set(hidden), collectPages });
 }
 
 describe('categorizeHistory', () => {
@@ -30,7 +30,8 @@ describe('categorizeHistory', () => {
       count: 5,
       lastVisitTime: 0,
       title: 'Descrição do repo',
-      iconPageUrl: 'https://github.com/dono/repo'
+      iconPageUrl: 'https://github.com/dono/repo',
+      pages: []
     }]);
     expect(domainCounts.size).toBe(0);
   });
@@ -94,6 +95,60 @@ describe('categorizeHistory', () => {
     it('exige todos os termos, em qualquer ordem', () => {
       expect(categorize(entries, { search: 'ci dono' }).projectGroups.size).toBe(1);
       expect(categorize(entries, { search: 'ci outro' }).projectGroups.size).toBe(0);
+    });
+
+    it('mostra as páginas internas encontradas quando o card não explica o resultado', () => {
+      const { projectGroups } = categorize(entries, { search: 'configuracao', collectPages: true });
+
+      expect(projectGroups.get('github.com › dono').get('repo:github.com/dono/repo').pages).toEqual([
+        { url: 'https://github.com/dono/repo/pull/1', title: 'Configuração do CI', visits: 1, lastVisitTime: 0 }
+      ]);
+    });
+
+    it('não lista páginas internas quando o próprio card casa com a busca', () => {
+      const { projectGroups } = categorize(entries, { search: 'dono repo', collectPages: true });
+      expect(projectGroups.get('github.com › dono').get('repo:github.com/dono/repo').pages).toEqual([]);
+    });
+
+    it('limita as páginas às mais visitadas, usando o caminho quando falta título', () => {
+      const { domainCounts } = categorize([
+        entry('https://example.com/', 9, 'Exemplo'),
+        entry('https://example.com/docs/a', 1, 'Guia A', 10),
+        entry('https://example.com/docs/b', 3),
+        entry('https://example.com/docs/c', 2, 'Guia C'),
+        entry('https://example.com/docs/d', 1, 'Guia D', 20)
+      ], { search: 'docs', collectPages: true });
+
+      expect(domainCounts.get('domain:example.com').pages.map(page => page.title))
+        .toEqual(['/docs/b', 'Guia C', 'Guia D']);
+    });
+
+    it('conta uma vez a mesma página com outra query ou hash, pela URL mais visitada', () => {
+      const { projectGroups } = categorize([
+        entry('https://github.com/dono/repo/pull/1?tab=files', 1, 'Configuração do CI'),
+        entry('https://github.com/dono/repo/pull/1', 4, 'Configuração do CI'),
+        entry('https://github.com/dono/repo/pull/1#discussion', 2, 'Configuração do CI')
+      ], { search: 'configuracao', collectPages: true });
+
+      expect(projectGroups.get('github.com › dono').get('repo:github.com/dono/repo').pages.map(page => page.url))
+        .toEqual(['https://github.com/dono/repo/pull/1']);
+    });
+
+    it('distingue as rotas de SPA pelo hash', () => {
+      const { domainCounts } = categorize([
+        entry('https://app.example.com/', 5, 'Painel'),
+        entry('https://app.example.com/#/settings', 2, 'Relatório de uso'),
+        entry('https://app.example.com/#/billing', 1, 'Relatório de cobrança')
+      ], { search: 'relatorio', collectPages: true });
+
+      expect(domainCounts.get('domain:app.example.com').pages.map(page => page.url))
+        .toEqual(['https://app.example.com/#/settings', 'https://app.example.com/#/billing']);
+    });
+
+    it('não lista páginas sem busca nem com a opção desligada', () => {
+      const pagesOf = options => categorize(entries, options).projectGroups.get('github.com › dono').get('repo:github.com/dono/repo').pages;
+      expect(pagesOf({ collectPages: true })).toEqual([]);
+      expect(pagesOf({ search: 'configuracao' })).toEqual([]);
     });
   });
 
