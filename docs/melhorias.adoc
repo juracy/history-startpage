@@ -20,6 +20,24 @@ toc::[]
 
 Itens fixados que apareceriam sempre, independentemente do histórico do período.
 
+[[bookmarks]]
+=== Integração com os bookmarks
+
+Um grupo *Bookmarks* no painel, com os N bookmarks mais acessados conforme o histórico, seguindo os mesmos filtros dos demais cards: período, ordenação (visitas, frecency ou último acesso), busca e itens ocultos.
+
+Um item não deve aparecer duplicado: se o bookmark já é mostrado em outro grupo (repositórios, domínios ou um agrupamento), ele não se repete.
+Hoje um item casado com um agrupamento já sai das listas de repositórios e domínios (`categorizeHistory`); o grupo *Bookmarks* entraria nessa mesma decisão, pela chave do card (`repo:…`/`domain:…`), e falta definir a precedência: o bookmark sai das outras listas, como num agrupamento, ou só entra em *Bookmarks* o que não aparece em nenhum outro grupo.
+
+Pontos a decidir:
+
+* *casamento com o histórico*: pela URL exata do bookmark ou pela chave do card (repositório ou domínio), contando todas as páginas dele; a URL exata é mais fiel ao bookmark, a chave junta variações como query e hash;
+* *bookmarks sem visita no período*: ficam de fora (o grupo mostra o que é usado) ou aparecem no fim, sem contagem;
+* *pastas*: mostrar todas ou só as escolhidas na página de configurações, como um agrupamento por pasta;
+* *permissão*: a API `chrome.bookmarks` exige a permissão `bookmarks`, que, adicionada ao manifesto, faz o Chrome desativar a extensão até o usuário aceitar; como `optional_permissions`, pedida ao ligar a opção nas configurações, evita isso;
+* *atualização*: `chrome.bookmarks.onCreated`/`onRemoved`/`onChanged` para refletir mudanças sem recarregar a aba.
+
+Pode servir de base para <<favoritos>>: um bookmark é, na prática, um item fixado pelo usuário.
+
 [[exportar]]
 === Exportar e importar a configuração
 
@@ -93,7 +111,6 @@ Depende de <<i18n>>.
 
 Pendências antes de publicar:
 
-* ícones da extensão (16, 48 e 128 px), que o manifesto ainda não declara;
 * política de privacidade e justificativa da permissão `history` (os dados não saem do navegador);
 * capturas de tela, descrição da loja nos idiomas suportados (<<i18n>>) e um nome mais distintivo que "Custom Dynamic Dashboard";
 * script para gerar o `.zip` só com os arquivos da extensão, sem `tests/`, `docs/`, `node_modules/` e `theme.css`.
