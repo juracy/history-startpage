@@ -18,6 +18,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - O número em cada card é o total de visitas no período; passe o mouse sobre o card para ver também o último acesso ("12 visitas no último mês · último acesso há 2 horas"). Leitores de tela anunciam o mesmo texto.
 - **Layout Responsivo:**
   - Em janelas estreitas (como a tela dividida ao meio), as seções passam para uma coluna e o cabeçalho quebra linha.
+  - Em telas largas, o painel ocupa a largura disponível (até 1920px) e os grupos de repositórios e os domínios se distribuem em várias colunas, lidas de cima para baixo.
 - **Listas Compactas:**
   - O painel mostra 5 itens por grupo, 8 grupos de repositórios e 15 domínios; o botão **Mostrar mais N** abre o restante da lista (e **Mostrar menos** a recolhe). Durante a busca, o mesmo botão indica quantos resultados ficaram de fora.
 - **Seletor de Período:**
