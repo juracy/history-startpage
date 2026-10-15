@@ -24,7 +24,7 @@ Extensão Chrome Manifest V3 que substitui a New Tab Page por um painel com os r
 - `options.html`/`options.js` (configurações): uma página com quatro seções empilhadas (hosts Git, agrupamentos, itens ocultos e busca), que é onde `gitHosts`/`gitHostForges`, `urlGroups` e `showMatchedPages` são editados. A seção pedida (âncora da URL, `hashchange` ou `optionsSection` do `storage.session`) recebe o foco; no carregamento, isso espera o `load`, porque o Chrome aplica a âncora nesse momento e tira o foco dado antes. Os ícones das listas vêm de `fetchHostIconPages`, que procura no histórico a raiz visitada de cada host.
 - `dom.js`: pedaços de interface comuns às duas páginas (`renderMessage`, `createFavicon`, `hostIconPage`, `showError`). Fica fora de `lib/` porque usa DOM.
 - Sincronização entre as páginas: veja *Persistência*. O painel recategoriza o cache, sem reler o histórico, e não acompanha `historyPeriod` nem `sortOrder` (a escolha feita em outra aba vale para as próximas).
-- `lib/`: lógica sem DOM, importável pelos testes. `constants.js`, `text.js`, `forges.js`, `categorize.js`, `groups.js` e `sort.js` são puros (o estado chega por parâmetro); só `history.js`, `history-cache.js` e `storage.js` usam `chrome.*`, que nos testes é o substituto de `tests/fake-chrome.js`. Não use DOM nem estado global em `lib/`.
+- `lib/`: lógica sem DOM, importável pelos testes. `constants.js`, `text.js`, `forges.js`, `categorize.js`, `groups.js`, `sort.js` e `spatial.js` são puros (o estado chega por parâmetro); só `history.js`, `history-cache.js` e `storage.js` usam `chrome.*`, que nos testes é o substituto de `tests/fake-chrome.js`. Não use DOM nem estado global em `lib/`.
 - `tests/`: testes Vitest em ambiente Node, um arquivo por módulo de `lib/`.
 
 ### Fluxo de dados
@@ -52,7 +52,7 @@ O cache do histórico fica no `chrome.storage.local` (`lib/history-cache.js`), n
 
 ### Foco na busca
 
-O Chrome dá o foco da nova aba à barra de endereço. `setupSearch` trata `Shift+F6`/`F6` (o evento `focus` da janela, ignorando foco vindo de clique), `/` em qualquer ponto da página e `Esc` para limpar. Não quebre essas interações ao mexer em foco ou atalhos.
+O Chrome dá o foco da nova aba à barra de endereço. `setupSearch` trata `Shift+F6`/`F6` (o evento `focus` da janela, ignorando foco vindo de clique), `/` em qualquer ponto da página e `Esc` para limpar. Nos resultados, `↑`/`↓` seguem a ordem do DOM (`↑` no primeiro volta à busca) e `←`/`→` vão para o item mais próximo na coluna ao lado, pela posição na tela (`findHorizontalNeighbor`, em `lib/spatial.js`), sem sair da região (agrupamentos ou repositórios + domínios). Não quebre essas interações ao mexer em foco ou atalhos.
 
 ## Convenções
 

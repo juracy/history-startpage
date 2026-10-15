@@ -6,6 +6,7 @@ import {
 import { toGitHost } from './lib/forges.js';
 import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
 import { readHistoryCache, updateHistoryCache, writeHistoryCache } from './lib/history-cache.js';
+import { findHorizontalNeighbor } from './lib/spatial.js';
 import {
   createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readShowMatchedPages,
   readSortOrder, readUrlGroups, watchSyncedSettings, writeHiddenItems, writeHistoryPeriod, writeSortOrder
@@ -533,11 +534,15 @@ function getNavigableItems() {
   return Array.from(document.querySelector('.container').querySelectorAll(NAVIGABLE_SELECTOR));
 }
 
-// ↑/↓ percorrem os cards, as páginas encontradas e os botões "Mostrar mais"; ↑ no primeiro volta para a busca.
-// Enter e Ctrl+Enter num card focado já são tratados pelo próprio link
+const ARROW_KEYS = new Set(['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight']);
+
+// ↑/↓ percorrem os cards, as páginas encontradas e os botões "Mostrar mais" na ordem do documento
+// (que, nas colunas, é de cima para baixo); ↑ no primeiro volta para a busca. ←/→ vão para o item
+// mais próximo na coluna ao lado, pela posição na tela. Enter e Ctrl+Enter num card focado já são
+// tratados pelo próprio link
 function setupResultsNavigation(input) {
   document.querySelector('.container').addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (!ARROW_KEYS.has(e.key)) return;
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
 
     const card = e.target.closest(NAVIGABLE_SELECTOR);
@@ -546,7 +551,18 @@ function setupResultsNavigation(input) {
     const cards = getNavigableItems();
     const index = cards.indexOf(card);
     e.preventDefault();
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      // Só dentro da mesma região: os cards dos agrupamentos são bem mais largos que as colunas
+      // de baixo e as juntariam numa só; entre as regiões, quem navega são ↑/↓
+      const region = card.closest('#url-groups, .grid');
+      const visible = cards
+        .filter(item => region?.contains(item))
+        .map(item => ({ item, rect: item.getBoundingClientRect() }))
+        .filter(({ item, rect }) => item === card || rect.width > 0 || rect.height > 0);
+      const neighbor = findHorizontalNeighbor(card.getBoundingClientRect(),
+        visible.map(({ rect }) => rect), e.key === 'ArrowRight' ? 'right' : 'left');
+      visible[neighbor]?.item.focus();
+    } else if (e.key === 'ArrowDown') {
       cards[index + 1]?.focus();
     } else if (index === 0) {
       input.focus();

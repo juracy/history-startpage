@@ -65,6 +65,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 │   ├── categorize.js   # Agregação em repositórios, domínios e agrupamentos
 │   ├── sort.js         # Ordenação por visitas, frecency ou último acesso
 │   ├── groups.js       # Edição e reordenação dos agrupamentos
+│   ├── spatial.js      # Card vizinho na coluna ao lado, para a navegação por ←/→
 │   └── storage.js      # Leitura e gravação das configurações
 ├── tests/              # Testes unitários (Vitest)
 ├── background.js       # Atalho Alt+T e remoção do cache das páginas apagadas do histórico
@@ -145,6 +146,7 @@ As cores do painel podem acompanhar o papel de parede via [matugen](https://gith
 | `Enter` (na busca) | Abre o primeiro resultado, se houver algo digitado; se o primeiro card mostrar páginas encontradas, abre a primeira delas. |
 | `Ctrl+Enter` | Abre o primeiro resultado (ou o card focado) numa aba em segundo plano. |
 | `↑` / `↓` | Percorrem os cards, as páginas encontradas abaixo deles e os botões "Mostrar mais" a partir da busca; `↑` no primeiro card volta para a busca. |
+| `←` / `→` | Vão para o card mais próximo na coluna ao lado, inclusive entre repositórios e domínios. |
 | `Alt+T` | Abre o painel numa nova aba com o cursor já na busca. |
 
 ### O `Alt+T` não funciona
