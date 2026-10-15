@@ -12,6 +12,7 @@ Extensão Chrome Manifest V3 que substitui a New Tab Page por um painel com os r
 - Mudanças em `index.html`/`app.js` aparecem ao abrir uma nova aba, e em `options.html`/`options.js` ao recarregar a página de configurações; mudanças em `manifest.json` ou `background.js` exigem recarregar a extensão em `chrome://extensions`.
 - Rode `npm install` uma vez e `npm test` antes de cada commit. Mudanças em `lib/` (forjas, categorização, histórico, storage) vêm acompanhadas de testes em `tests/`.
 - Para validar a interface, abra uma nova aba e confira o console da página (DevTools da própria aba). O service worker tem console separado (link "service worker" no card da extensão).
+- O ícone tem como fonte `icons/icon.svg`, usado direto como favicon das duas páginas. A chave `icons` do manifesto não aceita SVG, então, ao mudá-lo, gere de novo os PNGs: `for s in 16 32 48 128; do rsvg-convert -w $s -h $s icons/icon.svg -o icons/icon-$s.png; done`.
 - Ao adicionar funcionalidade visível ao usuário, atualize o `README.md` (funcionalidades, atalhos, estrutura do projeto).
 
 ## Arquitetura

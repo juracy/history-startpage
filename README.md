@@ -35,6 +35,8 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - O botão **⊘ Ocultos**, que só aparece quando há itens ocultos, abre as configurações (ou a aba delas já aberta) direto na lista do que foi escondido, onde é possível mostrar de novo. A lista é sincronizada via `chrome.storage.sync`.
 - **Favicons:**
   - Cada repositório, domínio e host Git mostra o ícone do site, lido do cache local de favicons do Chrome (permissão `favicon`), sem nenhuma requisição externa — funciona também com hosts internos. Sites sem ícone em cache aparecem com o globo padrão.
+- **Ícone Próprio:**
+  - O painel e as configurações mostram o ícone da extensão na aba, fácil de achar quando ficam abertos entre outras abas.
 - **Configurações:**
   - Uma página única, aberta pelo botão **⚙ Configurações** do painel ou em `chrome://extensions` → **Detalhes** → **Opções da extensão**, com quatro seções: hosts Git, agrupamentos, itens ocultos e busca.
   - **Hosts Git:** adicione e remova instâncias personalizadas, escolhendo o tipo de forja, sem editar código.
@@ -65,6 +67,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 │   └── storage.js      # Leitura e gravação das configurações
 ├── tests/              # Testes unitários (Vitest)
 ├── background.js       # Atalho Alt+T e remoção do cache das páginas apagadas do histórico
+├── icons/              # Ícone da extensão: icon.svg (favicon das abas) e PNGs gerados dele
 ├── theme.css           # Cores geradas pelo matugen (opcional, não versionado)
 └── README.md           # Documentação
 ```
