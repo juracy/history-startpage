@@ -1,14 +1,16 @@
 import { categorizeHistory } from './lib/categorize.js';
 import {
-  DEFAULT_GIT_HOSTS, DEFAULT_PERIOD_ID, DOMAINS_LIMIT, HISTORY_PERIODS, ITEMS_PER_GROUP, REPO_GROUPS_LIMIT, findPeriod
+  DEFAULT_GIT_HOSTS, DEFAULT_PERIOD_ID, DEFAULT_SORT_ID, DOMAINS_LIMIT, HISTORY_PERIODS, ITEMS_PER_GROUP,
+  REPO_GROUPS_LIMIT, SORT_ORDERS, findPeriod, findSortOrder
 } from './lib/constants.js';
 import { toGitHost } from './lib/forges.js';
 import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
 import { readHistoryCache, updateHistoryCache, writeHistoryCache } from './lib/history-cache.js';
 import {
   createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readShowMatchedPages,
-  readUrlGroups, watchSyncedSettings, writeHiddenItems, writeHistoryPeriod
+  readSortOrder, readUrlGroups, watchSyncedSettings, writeHiddenItems, writeHistoryPeriod, writeSortOrder
 } from './lib/storage.js';
+import { sortItems, summarizeGroup } from './lib/sort.js';
 import { findHighlightRanges, formatTimeAgo, parseSearchTerms } from './lib/text.js';
 import { createFavicon, renderMessage, showError } from './dom.js';
 
@@ -19,6 +21,9 @@ const PERIOD_DEBOUNCE_MS = 400;
 let currentGitHosts = DEFAULT_GIT_HOSTS.map(host => toGitHost(host));
 
 let currentPeriod = findPeriod(DEFAULT_PERIOD_ID);
+
+// Ordem dos cards e dos grupos: mais visitados, frequentes e recentes ou recentes
+let currentSort = findSortOrder(DEFAULT_SORT_ID);
 
 // Incrementado a cada carregamento; resultados de um carregamento anterior são descartados
 let historyLoadId = 0;
@@ -103,18 +108,17 @@ async function saveHiddenItems(update) {
   return true;
 }
 
-async function loadHistoryPeriod() {
-  currentPeriod = await readHistoryPeriod();
-  return currentPeriod;
+async function loadViewOptions() {
+  [currentPeriod, currentSort] = await Promise.all([readHistoryPeriod(), readSortOrder()]);
 }
 
 // A troca vale na hora; falha ao salvar só impede que a escolha valha para as próximas abas
-function saveHistoryPeriod(id) {
+function saveViewOption(write, id, label) {
   return enqueueSave(async () => {
     try {
-      await writeHistoryPeriod(id);
+      await write(id);
     } catch (e) {
-      console.error('Falha ao salvar o período:', e);
+      console.error(`Falha ao salvar ${label}:`, e);
     }
   });
 }
@@ -148,7 +152,7 @@ function showLoadingProgress(done, total) {
 
 // now, e não o updatedAt do cache: o cache pode cobrir um período maior ou ser de horas atrás
 function showHistory(cache, period, now) {
-  historyEntries = buildHistoryEntries(cache.records, now - period.ms);
+  historyEntries = buildHistoryEntries(cache.records, now - period.ms, now);
   hostIconPages = buildHostIconPages(historyEntries);
   renderDashboard();
 }
@@ -320,8 +324,8 @@ async function hideItem(key, card, hideBtn) {
   (cards[index] || cards[cards.length - 1] || document.getElementById('search-input')).focus();
 }
 
-function sortByCount(bucket) {
-  return Array.from(bucket.values()).sort((a, b) => b.count - a.count);
+function sortBucket(bucket) {
+  return sortItems(bucket.values(), currentSort.id);
 }
 
 // Até `limit` itens e, se houver mais, o botão "Mostrar mais"/"Mostrar menos". Vale também
@@ -395,7 +399,7 @@ function renderUrlGroups(userGroups) {
 
   document.getElementById('url-groups-section').hidden = groups.length === 0;
   container.replaceChildren(...groups.map(group =>
-    createGroupBlock(`group:${group.id}`, group.title, sortByCount(userGroups.get(group.id)),
+    createGroupBlock(`group:${group.id}`, group.title, sortBucket(userGroups.get(group.id)),
       `Nenhum acesso ${currentPeriod.phrase}.`, ['item', 'itens'])
   ));
 }
@@ -410,13 +414,11 @@ function renderCategorizedRepos(projectGroups) {
     return;
   }
 
-  const sortedGroups = Array.from(projectGroups.entries())
-    .map(([groupName, reposMap]) => {
-      const repos = sortByCount(reposMap);
-      const totalVisits = repos.reduce((acc, r) => acc + r.count, 0);
-      return { groupName, repos, totalVisits };
-    })
-    .sort((a, b) => b.totalVisits - a.totalVisits);
+  // Os grupos seguem a mesma ordem dos cards, pelo resumo dos seus repositórios
+  const sortedGroups = sortItems(Array.from(projectGroups, ([groupName, reposMap]) => {
+    const repos = sortBucket(reposMap);
+    return { groupName, repos, ...summarizeGroup(repos) };
+  }), currentSort.id);
 
   container.replaceChildren(...limitedNodes('repo-groups', sortedGroups, REPO_GROUPS_LIMIT, group =>
     createGroupBlock(`repos:${group.groupName}`, group.groupName, group.repos, '', ['repositório', 'repositórios']),
@@ -427,7 +429,7 @@ function renderCategorizedRepos(projectGroups) {
 function renderTopDomains(domainCounts) {
   const container = document.getElementById('top-domains');
 
-  const domains = sortByCount(domainCounts);
+  const domains = sortBucket(domainCounts);
 
   if (domains.length === 0) {
     renderMessage(container, searchTerms.length > 0 ? 'Nenhum domínio encontrado.' : 'Nenhum domínio registrado.');
@@ -453,6 +455,30 @@ function setupSettingsButtons() {
   document.getElementById('open-hidden-btn').addEventListener('click', async () => {
     await chrome.storage.session.set({ optionsSection: 'ocultos' });
     chrome.runtime.openOptionsPage();
+  });
+}
+
+// --- Ordenação ---
+
+// Reordena o que já está categorizado, sem reler o histórico. Como o período, não acompanha
+// a escolha feita em outra aba, que vale só para as próximas
+function setupSortSelect() {
+  const select = document.getElementById('sort-select');
+
+  select.replaceChildren(...SORT_ORDERS.map(order => {
+    const option = document.createElement('option');
+    option.value = order.id;
+    option.textContent = order.label;
+    return option;
+  }));
+  select.value = currentSort.id;
+
+  select.addEventListener('change', () => {
+    const order = findSortOrder(select.value);
+    if (!order || order === currentSort) return;
+    currentSort = order;
+    renderDashboard({ recategorize: false });
+    saveViewOption(writeSortOrder, order.id, 'a ordenação');
   });
 }
 
@@ -487,7 +513,7 @@ function setupPeriodSelect() {
 
     clearTimeout(timer);
     timer = setTimeout(() => {
-      saveHistoryPeriod(period.id);
+      saveViewOption(writeHistoryPeriod, period.id, 'o período');
       loadHistory();
     }, PERIOD_DEBOUNCE_MS);
   });
@@ -619,7 +645,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // O período fica de fora: trocá-lo em outra aba não deve recarregar o histórico desta
   const settings = [gitHostsSetting, urlGroupsSetting, hiddenItemsSetting, showMatchedPagesSetting];
   watchSyncedSettings(settings);
-  await Promise.all([...settings.map(setting => setting.refresh()), loadHistoryPeriod()]);
+  await Promise.all([...settings.map(setting => setting.refresh()), loadViewOptions()]);
   setupPeriodSelect();
+  setupSortSelect();
   await loadHistory();
 });

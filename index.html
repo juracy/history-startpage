@@ -24,14 +24,14 @@
       display: flex;
       gap: 0.5rem;
     }
-    .period-select {
+    .header-select {
       font-family: inherit;
       outline: none;
     }
-    .period-select:focus-visible {
+    .header-select:focus-visible {
       border-color: var(--accent);
     }
-    .period-select option {
+    .header-select option {
       background: var(--card-bg);
       color: var(--text);
     }
@@ -273,7 +273,9 @@
     <header>
       <h1 id="page-title">Visão Geral · 1 mês</h1>
       <div class="header-actions">
-        <select id="period-select" class="btn period-select" aria-label="Período do histórico"
+        <select id="sort-select" class="btn header-select" aria-label="Ordenação"
+          title="Ordem dos itens: mais visitados, frequentes e recentes (visitas recentes valem mais) ou último acesso"></select>
+        <select id="period-select" class="btn header-select" aria-label="Período do histórico"
           title="Período do histórico (o Chrome costuma guardar só os últimos 90 dias)"></select>
         <button id="open-hidden-btn" class="btn" hidden>⊘ Ocultos</button>
         <button id="open-settings-btn" class="btn">⚙ Configurações</button>

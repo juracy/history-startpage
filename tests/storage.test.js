@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readShowMatchedPages,
-  readUrlGroups, watchSyncedSettings, writeGitHosts, writeHiddenItems, writeShowMatchedPages
+  readSortOrder, readUrlGroups, watchSyncedSettings, writeGitHosts, writeHiddenItems, writeShowMatchedPages
 } from '../lib/storage.js';
 import { installFakeChrome } from './fake-chrome.js';
 
@@ -108,6 +108,16 @@ describe('readHistoryPeriod', () => {
 
     installFakeChrome({ storage: { historyPeriod: '2d' } });
     expect((await readHistoryPeriod()).id).toBe('30d');
+  });
+});
+
+describe('readSortOrder', () => {
+  it('lê a ordenação salva e cai no padrão se for desconhecida', async () => {
+    installFakeChrome({ storage: { sortOrder: 'frecency' } });
+    expect((await readSortOrder()).id).toBe('frecency');
+
+    installFakeChrome({ storage: { sortOrder: 'alfabetica' } });
+    expect((await readSortOrder()).id).toBe('visits');
   });
 });
 

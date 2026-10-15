@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DAY_MS, HISTORY_PAGE_SIZE, VISITS_CONCURRENCY } from '../lib/constants.js';
 import {
-  buildHistoryEntries, buildHostIconPages, collectVisits, fetchHistoryItems, fetchHostIconPages
+  buildHistoryEntries, buildHostIconPages, collectVisits, fetchHistoryItems, fetchHostIconPages, frecencyScore
 } from '../lib/history.js';
 import { installFakeChrome } from './fake-chrome.js';
 
@@ -77,7 +77,35 @@ describe('collectVisits', () => {
   });
 });
 
+describe('frecencyScore', () => {
+  it('dá peso 1 à visita de agora e metade a cada meia-vida', () => {
+    expect(frecencyScore([now, now - DAY_MS, now - 2 * DAY_MS], DAY_MS, now)).toBeCloseTo(1 + 0.5 + 0.25);
+  });
+
+  it('não dá mais que 1 a uma visita registrada depois de now', () => {
+    expect(frecencyScore([now + 1000], DAY_MS, now)).toBe(1);
+  });
+});
+
 describe('buildHistoryEntries', () => {
+  it('calcula a frecency com meia-vida de um quarto do período', () => {
+    const records = [{ rawUrl: 'https://a.com/', title: 'A', lastVisitTime: now, visitTimes: [now, now - DAY_MS, now - 5 * DAY_MS] }];
+
+    const [entry] = buildHistoryEntries(records, now - 4 * DAY_MS, now);
+
+    expect(entry.visits).toBe(2);
+    expect(entry.score).toBeCloseTo(1.5);
+  });
+
+  it('limita a meia-vida aos 90 dias que o Chrome costuma guardar', () => {
+    const records = [{ rawUrl: 'https://a.com/', title: 'A', lastVisitTime: now, visitTimes: [now - 45 * DAY_MS] }];
+
+    const [entry] = buildHistoryEntries(records, now - 365 * DAY_MS, now);
+
+    // Meia-vida de 22,5 dias: a visita de 45 dias atrás vale um quarto
+    expect(entry.score).toBeCloseTo(0.25);
+  });
+
   it('ignora as visitas guardadas que saíram do período', () => {
     const records = [
       { rawUrl: 'https://a.com/', title: 'A', lastVisitTime: now - 1000, visitTimes: [now - 1000, now - 2 * DAY_MS] },

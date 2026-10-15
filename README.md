@@ -23,6 +23,8 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 - **Seletor de Período:**
   - Escolha a janela do histórico no topo do painel: 24 horas, 1 semana, 1 mês (padrão), 3 meses, 6 meses ou 1 ano. A escolha é lembrada e sincronizada via `chrome.storage.sync`.
   - O Chrome costuma guardar só os últimos ~90 dias de histórico; por isso 6 meses e 1 ano normalmente mostram o mesmo que 3 meses.
+- **Ordenação:**
+  - Ao lado do período, escolha a ordem dos cards e dos grupos de repositórios: **Mais visitados** (padrão, pelo total de visitas), **Frequentes e recentes** ("frecency": cada visita vale metade a cada quarto do período, até no máximo 3 meses, então no período de 1 mês uma visita de uma semana atrás vale metade de uma de hoje) ou **Recentes** (pelo último acesso). A troca é instantânea, sem reler o histórico, e também é lembrada e sincronizada. O número no card continua sendo o total de visitas.
 - **Busca Instantânea:**
   - Filtra repositórios, domínios e agrupamentos enquanto você digita, pela URL ou pelo título das páginas visitadas (sem diferenciar maiúsculas nem acentos; `Esc` limpa). Os termos encontrados aparecem destacados no nome e no título dos cards.
   - Opcionalmente (em **Configurações** → **Busca**, desativado por padrão), quando a busca casa com uma página interna (um PR, uma issue, um artigo) e não com o próprio repositório ou domínio, até 3 dessas páginas aparecem logo abaixo do card, as mais visitadas primeiro, com link direto.
@@ -46,7 +48,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 ```text
 ├── manifest.json       # Configuração da extensão Manifest V3
 ├── index.html          # Layout visual do painel
-├── app.js              # Estado, renderização, período e busca do painel
+├── app.js              # Estado, renderização, período, ordenação e busca do painel
 ├── options.html        # Página de configurações (hosts Git, agrupamentos, ocultos)
 ├── options.js          # Formulários e listas da página de configurações
 ├── common.css          # Cores e estilos comuns às duas páginas
@@ -58,6 +60,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 │   ├── history.js      # Leitura do histórico e contagem de visitas no período
 │   ├── history-cache.js # Cache do histórico processado e atualização incremental
 │   ├── categorize.js   # Agregação em repositórios, domínios e agrupamentos
+│   ├── sort.js         # Ordenação por visitas, frecency ou último acesso
 │   ├── groups.js       # Edição e reordenação dos agrupamentos
 │   └── storage.js      # Leitura e gravação das configurações
 ├── tests/              # Testes unitários (Vitest)

@@ -3,10 +3,10 @@ import { categorizeHistory } from '../lib/categorize.js';
 import { normalizeSearchText, parseSearchTerms, safeDecode } from '../lib/text.js';
 
 // Mesmo formato das entradas montadas por buildHistoryEntries
-function entry(rawUrl, visits, title = '', lastVisitTime = 0) {
+function entry(rawUrl, visits, title = '', lastVisitTime = 0, score = 0) {
   const url = new URL(rawUrl);
   return {
-    url, rawUrl, title, visits, lastVisitTime,
+    url, rawUrl, title, visits, lastVisitTime, score,
     searchText: normalizeSearchText(`${safeDecode(url.host + url.pathname)}\n${title}`)
   };
 }
@@ -28,6 +28,7 @@ describe('categorizeHistory', () => {
       name: 'repo',
       url: 'https://github.com/dono/repo',
       count: 5,
+      score: 0,
       lastVisitTime: 0,
       title: 'Descrição do repo',
       iconPageUrl: 'https://github.com/dono/repo',
@@ -227,5 +228,15 @@ describe('itens ocultos', () => {
     });
     expect(userGroups.get('g').size).toBe(0);
     expect(domainCounts.size).toBe(0);
+  });
+});
+
+describe('frecency', () => {
+  it('soma a pontuação das páginas de cada item', () => {
+    const { projectGroups } = categorize([
+      entry('https://github.com/dono/repo', 2, '', 0, 1.5),
+      entry('https://github.com/dono/repo/pull/1', 1, '', 0, 0.25)
+    ]);
+    expect(projectGroups.get('github.com › dono').get('repo:github.com/dono/repo').score).toBe(1.75);
   });
 });
