@@ -212,6 +212,19 @@ describe('updateHistoryCache', () => {
     expect(result.cache.builtAt).toBe(cache.builtAt);
   });
 
+  it('informa o progresso só na carga completa', async () => {
+    installFakeChrome({ visits: visits() });
+    const progress = [];
+    const onProgress = (done, total) => progress.push([done, total]);
+
+    await updateHistoryCache(null, week, always, now, onProgress);
+    expect(progress).toEqual([[0, 1], [1, 1]]);
+
+    progress.length = 0;
+    await updateHistoryCache(cacheOf([], { periodMs: week.ms, builtAt: now - 60_000 }), day, always, now, onProgress);
+    expect(progress).toEqual([]);
+  });
+
   it('refaz a carga completa, no período do cache, quando ela tem mais de um dia', async () => {
     const chrome = installFakeChrome({ visits: visits() });
     const cache = cacheOf([], { periodMs: week.ms, builtAt: now - HISTORY_CACHE_FULL_RELOAD_MS - 1, updatedAt: now - 60_000 });

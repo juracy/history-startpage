@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DAY_MS, HISTORY_PAGE_SIZE } from '../lib/constants.js';
+import { DAY_MS, HISTORY_PAGE_SIZE, VISITS_CONCURRENCY } from '../lib/constants.js';
 import {
   buildHistoryEntries, buildHostIconPages, collectVisits, fetchHistoryItems, fetchHostIconPages
 } from '../lib/history.js';
@@ -58,6 +58,22 @@ describe('collectVisits', () => {
     installFakeChrome({ visits: [{ url: 'https://example.com/', visitTime: now - 1000 }] });
     const items = await fetchHistoryItems(now - DAY_MS, always);
     expect(await collectVisits(items, now - DAY_MS, () => false)).toBeNull();
+  });
+
+  it('informa o progresso a cada lote, só com as URLs consideradas', async () => {
+    const total = VISITS_CONCURRENCY + 5;
+    installFakeChrome({
+      visits: [
+        ...Array.from({ length: total }, (_, i) => ({ url: `https://example.com/${i}`, visitTime: now - 1000 - i })),
+        { url: 'chrome://extensions/', visitTime: now - 500 }
+      ]
+    });
+    const items = await fetchHistoryItems(now - DAY_MS, always);
+    const progress = [];
+
+    await collectVisits(items, now - DAY_MS, always, (done, count) => progress.push([done, count]));
+
+    expect(progress).toEqual([[0, total], [VISITS_CONCURRENCY, total], [total, total]]);
   });
 });
 

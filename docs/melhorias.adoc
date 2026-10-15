@@ -10,7 +10,6 @@ toc::[]
 
 == Ordem recomendada
 
-. Progresso da carga completa, que ainda percorre todo o histórico (<<progresso>>).
 . Busca que encontra uma página interna, com destaque dos termos (<<pagina-interna>>, <<destacar>>).
 . Ordenar por recência ou "frecency" (<<frecency>>).
 . Na página de configurações (`options.html`), desfazer remoções, restaurar os hosts Git padrão e exportar/importar (<<desfazer>>, <<hosts-padrao>>, <<exportar>>).
@@ -53,12 +52,6 @@ Se o usuário remover `github.com` ou `gitlab.com`, hoje só consegue recolocá-
 === Destacar os termos encontrados
 
 Realçar os termos da busca no nome e no título dos cards.
-
-[[progresso]]
-=== Mostrar o progresso do carregamento
-
-Na carga completa sem cache (a primeira, ao escolher um período maior ou depois de apagar todo o histórico), aparece só "Carregando…", mas no período de 3 meses o carregamento faz milhares de chamadas a `chrome.history.getVisits`.
-Algo como "Carregando… 1.200 de 4.800 páginas" já ajudaria.
 
 [[desfazer]]
 === Desfazer remoções

@@ -23,6 +23,9 @@ let currentPeriod = findPeriod(DEFAULT_PERIOD_ID);
 // Incrementado a cada carregamento; resultados de um carregamento anterior são descartados
 let historyLoadId = 0;
 
+// Mensagens "Carregando…" do carregamento em andamento, atualizadas com o progresso da carga completa
+let loadingMessages = [];
+
 // Agrupamentos do usuário: [{ id, title, pattern }]; a primeira regra que casar vence
 let currentUrlGroups = [];
 
@@ -111,10 +114,24 @@ function saveHistoryPeriod(id) {
 function startHistoryLoading() {
   historyEntries = null;
   updateUrlGroupsVisibility();
-  renderMessage(document.getElementById('url-groups'), 'Carregando…');
-  renderMessage(document.getElementById('git-repos'), 'Carregando…');
-  renderMessage(document.getElementById('top-domains'), 'Carregando…');
+  loadingMessages = renderStatusMessage('Carregando…');
+  // Só a mensagem dos repositórios, cuja seção nunca fica oculta, é anunciada pelo leitor de tela;
+  // nas três, o mesmo progresso seria lido três vezes
+  loadingMessages[1].setAttribute('role', 'status');
   return ++historyLoadId;
+}
+
+function renderStatusMessage(text) {
+  return ['url-groups', 'git-repos', 'top-domains']
+    .map(id => renderMessage(document.getElementById(id), text));
+}
+
+// A carga completa de um período longo faz milhares de chamadas a getVisits. Troca só o texto:
+// recriar as mensagens a cada lote reiniciaria o anúncio do role="status"
+function showLoadingProgress(done, total) {
+  if (total === 0) return;
+  const text = `Carregando… ${done.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')} páginas`;
+  for (const message of loadingMessages) message.textContent = text;
 }
 
 // now, e não o updatedAt do cache: o cache pode cobrir um período maior ou ser de horas atrás
@@ -138,14 +155,13 @@ async function loadHistory() {
 
   let updated;
   try {
-    updated = await updateHistoryCache(cached, period, isCurrent, startedAt);
+    // Com o cache na tela, a carga completa diária roda por trás, sem trocar os cards pelo progresso
+    updated = await updateHistoryCache(cached, period, isCurrent, startedAt, cached ? undefined : showLoadingProgress);
   } catch (e) {
     if (!isCurrent()) return;
     console.error('Falha ao carregar histórico:', e);
     if (cached) return;
-    renderMessage(document.getElementById('url-groups'), 'Erro ao carregar o histórico.');
-    renderMessage(document.getElementById('git-repos'), 'Erro ao carregar o histórico.');
-    renderMessage(document.getElementById('top-domains'), 'Erro ao carregar o histórico.');
+    renderStatusMessage('Erro ao carregar o histórico.');
     return;
   }
 

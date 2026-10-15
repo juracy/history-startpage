@@ -5,6 +5,7 @@ export function renderMessage(container, text) {
   div.className = 'empty-state';
   div.textContent = text;
   container.replaceChildren(div);
+  return div;
 }
 
 // Lê o cache local de favicons do Chrome (permissão "favicon"), sem nenhuma requisição externa;

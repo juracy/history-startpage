@@ -13,7 +13,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 - **Domínios Mais Acessados:**
   - Extrai e consolida o host raiz dos seus sites mais frequentados no período, evitando poluição de URLs específicas.
 - **Abertura Instantânea:**
-  - O resultado processado fica guardado localmente (`chrome.storage.local`), e cada nova aba o mostra na hora; em seguida, o painel consulta só as páginas visitadas desde a abertura anterior e se atualiza, sem tirar o foco do card em que você está. O mesmo cache serve a todos os períodos até o maior já carregado. A carga completa só acontece na primeira vez, ao escolher um período maior, depois de apagar todo o histórico e uma vez por dia, em segundo plano. Páginas apagadas do histórico saem do cache na hora.
+  - O resultado processado fica guardado localmente (`chrome.storage.local`), e cada nova aba o mostra na hora; em seguida, o painel consulta só as páginas visitadas desde a abertura anterior e se atualiza, sem tirar o foco do card em que você está. O mesmo cache serve a todos os períodos até o maior já carregado. A carga completa só acontece na primeira vez, ao escolher um período maior, depois de apagar todo o histórico e uma vez por dia, em segundo plano; enquanto ela roda sem cache na tela, o painel mostra quantas páginas já foram lidas ("Carregando… 1.200 de 4.800 páginas"). Páginas apagadas do histórico saem do cache na hora.
 - **Contador de Visitas:**
   - O número em cada card é o total de visitas no período; passe o mouse sobre o card para ver também o último acesso ("12 visitas no último mês · último acesso há 2 horas"). Leitores de tela anunciam o mesmo texto.
 - **Layout Responsivo:**
