@@ -17,6 +17,17 @@
       align-items: center;
       margin-bottom: 2rem;
     }
+    /* Ícone fora do h1: app.js troca o textContent do título a cada mudança de período */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .brand-icon {
+      width: 2rem;
+      height: 2rem;
+      flex-shrink: 0;
+    }
     h1 {
       font-size: 1.5rem;
       font-weight: 600;
@@ -297,7 +308,10 @@
 <body>
   <div class="container">
     <header>
-      <h1 id="page-title">Visão Geral · 1 mês</h1>
+      <div class="brand">
+        <img class="brand-icon" src="icons/icon.svg" alt="">
+        <h1 id="page-title">Visão Geral · 1 mês</h1>
+      </div>
       <div class="header-actions">
         <select id="sort-select" class="btn header-select" aria-label="Ordenação"
           title="Ordem dos itens: mais visitados, frequentes e recentes (visitas recentes valem mais) ou último acesso"></select>

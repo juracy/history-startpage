@@ -37,7 +37,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
 - **Favicons:**
   - Cada repositório, domínio e host Git mostra o ícone do site, lido do cache local de favicons do Chrome (permissão `favicon`), sem nenhuma requisição externa — funciona também com hosts internos. Sites sem ícone em cache aparecem com o globo padrão.
 - **Ícone Próprio:**
-  - O painel e as configurações mostram o ícone da extensão na aba, fácil de achar quando ficam abertos entre outras abas.
+  - O painel e as configurações mostram o ícone da extensão na aba, fácil de achar quando ficam abertos entre outras abas. No painel, ele aparece também antes do título.
 - **Configurações:**
   - Uma página única, aberta pelo botão **⚙ Configurações** do painel ou em `chrome://extensions` → **Detalhes** → **Opções da extensão**, com quatro seções: hosts Git, agrupamentos, itens ocultos e busca.
   - **Hosts Git:** adicione e remova instâncias personalizadas, escolhendo o tipo de forja, sem editar código.
