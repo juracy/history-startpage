@@ -20,7 +20,7 @@ Extensão leve (Manifest V3) para Google Chrome / navegadores Chromium que subst
   - Em janelas estreitas (como a tela dividida ao meio), as seções passam para uma coluna e o cabeçalho quebra linha.
   - Em telas largas, o painel ocupa a largura disponível (até 1920px) e os grupos de repositórios e os domínios se distribuem em várias colunas, lidas de cima para baixo; os cards de um agrupamento largo (por exemplo, o único da seção) também se espalham em colunas.
 - **Listas Compactas:**
-  - O painel mostra 5 itens por grupo, 8 grupos de repositórios e 15 domínios; o botão **Mostrar mais N** abre o restante da lista (e **Mostrar menos** a recolhe). Durante a busca, o mesmo botão indica quantos resultados ficaram de fora.
+  - O painel mostra 5 itens por grupo, 8 grupos de repositórios e 15 domínios (nos agrupamentos e nos domínios, o limite sobe até completar a última linha quando estão em várias colunas); o botão **Mostrar mais N** abre o restante da lista (e **Mostrar menos** a recolhe). Durante a busca, o mesmo botão indica quantos resultados ficaram de fora.
 - **Seletor de Período:**
   - Escolha a janela do histórico no topo do painel: 24 horas, 1 semana, 1 mês (padrão), 3 meses, 6 meses ou 1 ano. A escolha é lembrada e sincronizada via `chrome.storage.sync`.
   - O Chrome costuma guardar só os últimos ~90 dias de histórico; por isso 6 meses e 1 ano normalmente mostram o mesmo que 3 meses.

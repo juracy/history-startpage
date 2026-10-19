@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findHorizontalNeighbor } from '../lib/spatial.js';
+import { fillRows, findHorizontalNeighbor, multicolCount } from '../lib/spatial.js';
 
 const rect = (left, top, width = 100, height = 40) => ({ left, top, right: left + width, bottom: top + height });
 
@@ -47,5 +47,32 @@ describe('findHorizontalNeighbor', () => {
   it('no empate de altura, fica com o de cima', () => {
     const candidates = [rect(110, 50), rect(110, 0)];
     expect(findHorizontalNeighbor(rect(0, 25), candidates, 'right')).toBe(1);
+  });
+});
+
+describe('fillRows', () => {
+  it('sobe o limite até completar a última linha', () => {
+    expect(fillRows(5, 2)).toBe(6);
+    expect(fillRows(5, 3)).toBe(6);
+    expect(fillRows(5, 4)).toBe(8);
+    expect(fillRows(15, 2)).toBe(16);
+    expect(fillRows(15, 3)).toBe(15);
+  });
+
+  it('mantém o limite com uma coluna ou sem medida', () => {
+    expect(fillRows(5, 1)).toBe(5);
+    expect(fillRows(5, 0)).toBe(5);
+  });
+});
+
+describe('multicolCount', () => {
+  it('conta as colunas que cabem, com o espaço entre elas', () => {
+    expect(multicolCount(656, 320, 16)).toBe(2);
+    expect(multicolCount(655, 320, 16)).toBe(1);
+    expect(multicolCount(1000, 320, 16)).toBe(3);
+  });
+
+  it('tem pelo menos uma coluna', () => {
+    expect(multicolCount(200, 320, 16)).toBe(1);
   });
 });

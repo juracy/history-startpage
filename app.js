@@ -6,7 +6,7 @@ import {
 import { toGitHost } from './lib/forges.js';
 import { buildHistoryEntries, buildHostIconPages } from './lib/history.js';
 import { readHistoryCache, updateHistoryCache, writeHistoryCache } from './lib/history-cache.js';
-import { findHorizontalNeighbor } from './lib/spatial.js';
+import { fillRows, findHorizontalNeighbor, multicolCount } from './lib/spatial.js';
 import {
   createSaveQueue, createSyncedSetting, readGitHosts, readHiddenItems, readHistoryPeriod, readShowMatchedPages,
   readSortOrder, readUrlGroups, watchSyncedSettings, writeHiddenItems, writeHistoryPeriod, writeSortOrder
@@ -52,6 +52,9 @@ let showMatchedPages = false;
 
 // Listas abertas pelo "Mostrar mais" (ids como "domains" ou "repos:<grupo>"); zerado ao trocar o período
 const expandedLists = new Set();
+
+// Colunas que cada lista tem na tela (mesmos ids), para o limite completar a última linha
+const listColumns = new Map();
 
 // Última categorização, reaproveitada quando só muda o que é exibido (abrir ou fechar uma lista)
 let lastCategorized = null;
@@ -202,11 +205,39 @@ function renderDashboard({ recategorize = true } = {}) {
   }
   const { userGroups, projectGroups, domainCounts } = lastCategorized;
   // A atualização do cache e as mudanças de configuração redesenham os cards; o foco volta ao mesmo item
-  const focusedKey = document.activeElement?.closest?.('.item-card, .item-page')?.dataset.key;
+  const restoreFocus = rememberFocus();
   renderUrlGroups(userGroups);
   renderCategorizedRepos(projectGroups);
   renderTopDomains(domainCounts);
-  if (focusedKey) document.querySelector(`[data-key="${CSS.escape(focusedKey)}"]`)?.focus();
+  // A busca e as configurações mudam quantos agrupamentos dividem a linha, e com isso as colunas
+  // de cada um, sem que o contêiner mude de tamanho; o novo desenho é medido na hora
+  if (measureListColumns()) renderColumnLists();
+  restoreFocus();
+}
+
+// Redesenha só as listas cujo limite depende das colunas
+function renderColumnLists() {
+  renderUrlGroups(lastCategorized.userGroups);
+  renderTopDomains(lastCategorized.domainCounts);
+}
+
+// Seletor do elemento focado (card, página encontrada, × ou "Mostrar mais") que sobrevive ao
+// redesenho, já que os elementos são todos trocados; devolve a função que refoca
+function rememberFocus() {
+  const el = document.activeElement;
+  let selector = null;
+  if (el?.matches('.list-toggle')) {
+    selector = `.list-toggle[data-list-id="${CSS.escape(el.dataset.listId)}"]`;
+  } else if (el?.matches('.item-hide')) {
+    const key = el.parentElement.querySelector(':scope > .item-card')?.dataset.key;
+    if (key) selector = `.item-row:has(> [data-key="${CSS.escape(key)}"]) > .item-hide`;
+  } else {
+    const key = el?.closest?.('.item-card, .item-page')?.dataset.key;
+    if (key) selector = `[data-key="${CSS.escape(key)}"]`;
+  }
+  return () => {
+    if (selector) document.querySelector(selector)?.focus();
+  };
 }
 
 // Texto com os termos da busca em <mark>; os pedaços entram como nós de texto, nunca como HTML
@@ -332,7 +363,8 @@ function sortBucket(bucket) {
 // Até `limit` itens e, se houver mais, o botão "Mostrar mais"/"Mostrar menos". Vale também
 // durante a busca: o botão diz quantos resultados faltam, sem o custo de desenhar todos a cada tecla.
 // O primeiro item além do limite ganha data-first-extra, para onde o foco vai ao expandir
-function limitedNodes(listId, items, limit, render, [singular, plural]) {
+function limitedNodes(listId, items, baseLimit, render, [singular, plural]) {
+  const limit = fillRows(baseLimit, listColumns.get(listId) ?? 1);
   const expanded = expandedLists.has(listId);
   const nodes = (expanded ? items : items.slice(0, limit)).map(render);
   if (items.length <= limit) return nodes;
@@ -365,6 +397,54 @@ function toggleList(listId) {
   else newBtn.focus({ preventScroll: expanding });
 }
 
+// Quantas colunas a lista tem na tela: no grid, as trilhas (com auto-fit, as vazias aparecem como
+// 0px e também contam, pois o que importa é quantos cabem na linha); nas colunas de texto, a conta
+// do Chrome, que não expõe o número
+function countColumns(list) {
+  const style = getComputedStyle(list);
+  if (style.display === 'grid') return style.gridTemplateColumns.split(' ').length;
+  if (style.columnWidth !== 'auto') {
+    // A largura computada, e não clientWidth, que é arredondado e erraria bem no limite entre colunas
+    return multicolCount(parseFloat(style.width), parseFloat(style.columnWidth), parseFloat(style.columnGap) || 0);
+  }
+  return 1;
+}
+
+// Mede as listas e diz se alguma mudou de colunas. Listas escondidas (seção sem agrupamentos)
+// ficam com a última medida
+function measureListColumns() {
+  let changed = false;
+  const lists = [document.getElementById('top-domains'), ...document.querySelectorAll('#url-groups .sub-list')];
+  for (const list of lists) {
+    if (list.clientWidth === 0) continue;
+    const id = list.id === 'top-domains' ? 'domains' : list.dataset.listId;
+    const columns = countColumns(list);
+    if (listColumns.get(id) !== columns) {
+      listColumns.set(id, columns);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+// A quantidade de colunas só existe depois do layout, então o redimensionamento também redesenha
+// as listas quando ela muda. Observa os contêineres, que o redesenho não troca. O redesenho fica
+// para o próximo frame: feito no callback, mudaria a altura dos elementos observados e o Chrome
+// acusaria "ResizeObserver loop completed with undelivered notifications"
+function watchListColumns() {
+  let frame = 0;
+  const observer = new ResizeObserver(() => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      if (!lastCategorized || !measureListColumns()) return;
+      const restoreFocus = rememberFocus();
+      renderColumnLists();
+      restoreFocus();
+    });
+  });
+  for (const id of ['url-groups', 'top-domains']) observer.observe(document.getElementById(id));
+}
+
 function createGroupBlock(listId, title, items, emptyMessage, noun) {
   const groupBlock = document.createElement('div');
   groupBlock.className = 'project-group';
@@ -376,6 +456,7 @@ function createGroupBlock(listId, title, items, emptyMessage, noun) {
 
   const list = document.createElement('div');
   list.className = 'sub-list';
+  list.dataset.listId = listId;
   if (items.length === 0) {
     renderMessage(list, emptyMessage);
   } else {
@@ -658,6 +739,7 @@ function setupSearch() {
 document.addEventListener('DOMContentLoaded', async () => {
   setupSearch();
   setupSettingsButtons();
+  watchListColumns();
   // O período fica de fora: trocá-lo em outra aba não deve recarregar o histórico desta
   const settings = [gitHostsSetting, urlGroupsSetting, hiddenItemsSetting, showMatchedPagesSetting];
   watchSyncedSettings(settings);
