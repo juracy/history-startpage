@@ -78,6 +78,17 @@
     .url-groups .project-group {
       margin-bottom: 0;
     }
+    /* Um agrupamento largo (por exemplo, o único da seção) espalha os cards em colunas. Grid, e
+       não colunas de texto como nas listas abaixo: com os poucos itens de um agrupamento, o Chrome
+       balanceia as colunas deixando as últimas vazias */
+    .url-groups .sub-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    }
+    .url-groups .sub-list > :is(.list-toggle, .empty-state) {
+      grid-column: 1 / -1;
+      justify-self: start;
+    }
     .grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
